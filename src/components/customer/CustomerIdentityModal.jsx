@@ -1,30 +1,39 @@
-import React, { useState } from "react";
-import { User, Phone, Flame } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { User, Phone, Flame, ArrowRight } from "lucide-react";
 
 export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isOpen, onClose, onSave }) => {
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (isOpen) {
+      setName(initialName || "");
+      setPhone(initialPhone || "");
+      setError("");
+    }
+  }, [isOpen, initialName, initialPhone]);
+
   if (!isOpen) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const trimmedName = name.trim();
-    const trimmedPhone = phone.replace(/\s+/g, "");
-    if (trimmedName.length < 2) {
-      setError("Please enter your name.");
+    const digitsOnly = phone.replace(/[^\d+]/g, "");
+
+    if (trimmedName && trimmedName.length < 2) {
+      setError("Please enter a valid name (at least 2 letters) or skip.");
       return;
     }
-    if (!/^\+?\d{10,15}$/.test(trimmedPhone)) {
-      setError("Enter a valid phone number (10–15 digits).");
+    if (digitsOnly && !/^\+?\d{10,15}$/.test(digitsOnly)) {
+      setError("Enter a valid phone number (10–15 digits) or leave blank.");
       return;
     }
-    onSave({ name: trimmedName, phone: trimmedPhone });
+    onSave({ name: trimmedName, phone: digitsOnly });
   };
 
-  const handleClose = () => {
-    onClose();
+  const handleSkip = () => {
+    onSave({ name: "", phone: "" });
   };
 
   return (
@@ -39,7 +48,7 @@ export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isO
           </div>
           <div>
             <h2 className="text-base font-extrabold text-white">Welcome to Mirchi 360</h2>
-            <p className="text-xs text-slate-400">Please share your details before ordering.</p>
+            <p className="text-xs text-slate-400">Add your contact info for order updates (optional).</p>
           </div>
         </div>
 
@@ -48,14 +57,14 @@ export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isO
         )}
 
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-300">Customer Name</label>
+          <label className="text-xs font-semibold text-slate-300">Customer Name (Optional)</label>
           <div className="relative">
             <User className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Your name"
+              placeholder="e.g. Ali Khan"
               className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-rose-500"
               autoFocus
             />
@@ -63,7 +72,7 @@ export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isO
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-300">Phone Number</label>
+          <label className="text-xs font-semibold text-slate-300">Phone Number (Optional)</label>
           <div className="relative">
             <Phone className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
             <input
@@ -71,28 +80,39 @@ export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isO
               inputMode="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="03XXXXXXXXX"
+              placeholder="03001234567"
               className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-rose-500"
             />
           </div>
         </div>
 
-        <div className="flex space-x-2 pt-2">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-sm rounded-2xl min-h-[44px]"
-          >
-            Cancel
-          </button>
+        <div className="flex flex-col gap-2 pt-2">
           <button
             type="submit"
-            className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-sm rounded-2xl min-h-[44px]"
+            className="w-full py-3 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-extrabold text-sm rounded-2xl min-h-[44px] shadow-lg flex items-center justify-center gap-2"
           >
-            Continue
+            <span>Confirm & Send to Kitchen</span>
+            <ArrowRight className="w-4 h-4" />
           </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 font-semibold text-xs rounded-xl min-h-[40px]"
+            >
+              Back to Cart
+            </button>
+            <button
+              type="button"
+              onClick={handleSkip}
+              className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl min-h-[40px]"
+            >
+              Order as Guest
+            </button>
+          </div>
         </div>
       </form>
     </div>
   );
 };
+

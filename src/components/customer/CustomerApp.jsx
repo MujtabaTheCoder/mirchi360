@@ -50,12 +50,13 @@ export const CustomerApp = () => {
   const [toastMessage, setToastMessage] = useState("");
   const [showPastHistory, setShowPastHistory] = useState(false);
   const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [customerIdentity, setCustomerIdentity] = useState(() => {
     try {
       const saved = localStorage.getItem('mirchi_customer_identity');
-      return saved ? JSON.parse(saved) : { name: "", phone: "" };
+      return saved ? JSON.parse(saved) : { name: "", phone: "", skipped: false };
     } catch {
-      return { name: "", phone: "" };
+      return { name: "", phone: "", skipped: false };
     }
   });
 
@@ -134,64 +135,66 @@ export const CustomerApp = () => {
 
   const cartTotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
 
-  const handlePlaceOrder = () => {
-    if (cart.length === 0) return;
-
-    const trimmedName = sanitizeTextInput(customerIdentity.name || "", 80);
-    const trimmedPhone = sanitizeTextInput(customerIdentity.phone || "", 30);
-
-    // Check if customer identity is set
-    if (!trimmedName || !trimmedPhone) {
-      setIsIdentityModalOpen(true);
-      return;
-    }
-
-    const cleanNotes = sanitizeTextInput(orderNotes, 300);
-
-    const newOrd = createOrder({
-      items: cart,
-      totalAmount: cartTotal,
-      notes: cleanNotes,
-      customerName: trimmedName,
-      customerPhone: trimmedPhone
-    });
-
+  const executeOrderSubmission = async (name, phone) => {
+    setIsSubmittingOrder(true);
     try {
-      localStorage.setItem('mirchi_customer_identity', JSON.stringify({ name: trimmedName, phone: trimmedPhone }));
-    } catch { }
-
-    setCart([]);
-    setOrderNotes("");
-    setIsCartOpen(false);
-    setActiveTab("tracking");
-    showToast(`Order #${newOrd.orderNumber} placed! Name: ${trimmedName}`);
-  };
-
-  const handleIdentitySave = (identity) => {
-    const cleanName = sanitizeTextInput(identity.name || "", 80);
-    const cleanPhone = sanitizeTextInput(identity.phone || "", 30);
-    const cleanIdentity = { name: cleanName, phone: cleanPhone };
-    setCustomerIdentity(cleanIdentity);
-    try {
-      localStorage.setItem('mirchi_customer_identity', JSON.stringify(cleanIdentity));
-    } catch { }
-    setIsIdentityModalOpen(false);
-    // Now proceed with order placement
-    if (cart.length > 0) {
+      const finalName = name || `Table ${selectedTableNumber} Guest`;
       const cleanNotes = sanitizeTextInput(orderNotes, 300);
-      const newOrd = createOrder({
+
+      const confirmedOrder = await createOrder({
         items: cart,
         totalAmount: cartTotal,
         notes: cleanNotes,
-        customerName: cleanName,
-        customerPhone: cleanPhone
+        customerName: finalName,
+        customerPhone: phone || ""
       });
+
+      try {
+        localStorage.setItem('mirchi_customer_identity', JSON.stringify({ name: finalName, phone: phone || "", skipped: true }));
+      } catch { }
 
       setCart([]);
       setOrderNotes("");
       setIsCartOpen(false);
       setActiveTab("tracking");
-      showToast(`Order #${newOrd.orderNumber} placed! Name: ${cleanName}`);
+
+      const assignedNumber = confirmedOrder?.orderNumber || confirmedOrder?.order_number || "Active";
+      showToast(`Order #${assignedNumber} placed! (Table ${selectedTableNumber})`);
+    } catch (err) {
+      console.error("Order submission error:", err);
+      showToast("Order queued! Synchronizing with kitchen...");
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
+
+  const handlePlaceOrder = async () => {
+    if (cart.length === 0 || isSubmittingOrder) return;
+
+    const trimmedName = sanitizeTextInput(customerIdentity.name || "", 80);
+    const trimmedPhone = sanitizeTextInput(customerIdentity.phone || "", 30);
+
+    // If customer has never entered identity and never explicitly skipped, offer the friendly modal
+    if (!trimmedName && !trimmedPhone && !customerIdentity.skipped) {
+      setIsIdentityModalOpen(true);
+      return;
+    }
+
+    await executeOrderSubmission(trimmedName, trimmedPhone);
+  };
+
+  const handleIdentitySave = async (identity) => {
+    const cleanName = sanitizeTextInput(identity.name || "", 80);
+    const cleanPhone = sanitizeTextInput(identity.phone || "", 30);
+    const cleanIdentity = { name: cleanName, phone: cleanPhone, skipped: true };
+    setCustomerIdentity(cleanIdentity);
+    try {
+      localStorage.setItem('mirchi_customer_identity', JSON.stringify(cleanIdentity));
+    } catch { }
+    setIsIdentityModalOpen(false);
+
+    if (cart.length > 0) {
+      await executeOrderSubmission(cleanName, cleanPhone);
     }
   };
 
@@ -691,10 +694,19 @@ export const CustomerApp = () => {
                 <span className="text-rose-400 text-lg">PKR {cartTotal}</span>
               </div>
               <button
+                type="button"
+                disabled={isSubmittingOrder || cart.length === 0}
                 onClick={handlePlaceOrder}
-                className="w-full py-3 bg-rose-600 hover:bg-rose-500 text-white font-extrabold rounded-2xl shadow-lg transition text-sm"
+                className="w-full py-3.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-extrabold rounded-2xl shadow-lg transition text-sm flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                Send Order to Kitchen
+                {isSubmittingOrder ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Sending Order to Kitchen...</span>
+                  </>
+                ) : (
+                  <span>Send Order to Kitchen</span>
+                )}
               </button>
             </div>
           </div>

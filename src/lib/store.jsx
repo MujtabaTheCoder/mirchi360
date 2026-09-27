@@ -1164,9 +1164,23 @@ export const AppProvider = ({ children }) => {
           setOrders(prev => {
             const refreshed = prev.map(o => (o.orderNumber === nextOrderNumber ? newOrder : o));
             try { localStorage.setItem('mirchi_orders', JSON.stringify(refreshed)); } catch {}
+            broadcastSync('SYNC_ORDERS', refreshed);
             return refreshed;
           });
-          broadcastSync('SYNC_ORDERS', updated);
+
+          // Trigger immediate orders refresh
+          try {
+            const { data: freshOrders } = await supabase.from('orders').select('*, order_items(*)').order('created_at', { ascending: false });
+            if (freshOrders && freshOrders.length > 0) {
+              const realOrders = freshOrders.filter(o => o && !String(o.id).includes('seed')).map(normalizeOrder);
+              setOrders(prev => {
+                const merged = mergeById(prev, realOrders, normalizeOrder);
+                try { localStorage.setItem('mirchi_orders', JSON.stringify(merged)); } catch {}
+                broadcastSync('SYNC_ORDERS', merged);
+                return merged;
+              });
+            }
+          } catch {}
         }
       } catch (networkErr) {
         console.warn("Order submission network timeout or disconnect, queuing for background sync:", networkErr);
