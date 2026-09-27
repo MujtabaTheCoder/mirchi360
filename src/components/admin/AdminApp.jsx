@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Crown, Users, Utensils, QrCode, FileSearch, 
-  TrendingUp, Plus, Edit2, Lock, X, BarChart3, Calendar, 
-  Sun, Moon, Sunset, Phone, Trash2, CheckCircle, AlertTriangle, 
-  MessageSquare, Download, Printer, Search, RefreshCw, DollarSign, 
+import {
+  Crown, FileText, Users, Utensils, QrCode, FileSearch,
+  TrendingUp, Plus, Edit2, Lock, X, BarChart3, Calendar,
+  Sun, Moon, Sunset, Phone, Trash2, CheckCircle, AlertTriangle,
+  MessageSquare, Download, Printer, Search, RefreshCw, DollarSign,
   Archive, Clock, ChevronRight, User
 } from 'lucide-react';
 import { useApp, formatPakistanTime, formatPakistanDateTime, getPakistanDateString } from '../../lib/store';
@@ -14,17 +14,17 @@ import { SEED_DATA } from '../../lib/initialData';
 import { PortalLogin } from '../auth/PortalLogin';
 
 export const AdminApp = () => {
-  const { 
-    currentSession, 
-    activeSessions, 
-    orders, 
+  const {
+    currentSession,
+    activeSessions,
+    orders,
     clearAllOrders,
-    menuItems, 
-    saveMenuItem, 
-    toggleItemStock, 
-    auditLogs, 
-    modifyOrderWithPrivacyPin, 
-    selectedBranch, 
+    menuItems,
+    saveMenuItem,
+    toggleItemStock,
+    auditLogs,
+    modifyOrderWithPrivacyPin,
+    selectedBranch,
     setSelectedBranch,
     branches,
     branchReports,
@@ -41,7 +41,7 @@ export const AdminApp = () => {
   // Date Filtering Controls
   // period: 'today' | 'yesterday' | 'week' | 'month' | 'all' | 'custom'
   const [periodType, setPeriodType] = useState("today");
-  
+
   const todayStr = useMemo(() => getPakistanDateString(new Date()), []);
   const [customStartDate, setCustomStartDate] = useState(() => {
     const d = new Date();
@@ -85,7 +85,7 @@ export const AdminApp = () => {
   const isDateInPeriod = (dateInput) => {
     if (!dateInput) return false;
     const dateStr = getPakistanDateString(dateInput);
-    
+
     if (periodType === 'all') return true;
 
     if (periodType === 'today') {
@@ -113,8 +113,8 @@ export const AdminApp = () => {
     }
 
     if (periodType === 'custom') {
-      return (!customStartDate || dateStr >= customStartDate) && 
-             (!customEndDate || dateStr <= customEndDate);
+      return (!customStartDate || dateStr >= customStartDate) &&
+        (!customEndDate || dateStr <= customEndDate);
     }
 
     return true;
@@ -131,16 +131,16 @@ export const AdminApp = () => {
   });
 
   // Completed Orders across period
-  const completedOrdersList = filteredOrders.filter(o => 
+  const completedOrdersList = filteredOrders.filter(o =>
     o.status === 'completed' || o.payment === 'Paid' || o.status === 'served'
   );
 
-  const totalSystemRevenue = completedOrdersList.reduce((sum, o) => 
+  const totalSystemRevenue = completedOrdersList.reduce((sum, o) =>
     sum + (Number(o.totalAmount || o.total_amount) || 0), 0
   );
 
-  const avgOrderValue = completedOrdersList.length > 0 
-    ? Math.round(totalSystemRevenue / completedOrdersList.length) 
+  const avgOrderValue = completedOrdersList.length > 0
+    ? Math.round(totalSystemRevenue / completedOrdersList.length)
     : 0;
 
   // Filtered Complaints
@@ -366,9 +366,9 @@ export const AdminApp = () => {
       d.complaintsCount
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," 
+    const csvContent = "data:text/csv;charset=utf-8,"
       + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-    
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -396,7 +396,7 @@ export const AdminApp = () => {
               </span>
             </div>
             <p className="text-xs text-slate-400 truncate">
-              Admin: <strong className="text-slate-200">{currentSession.name}</strong> ({currentSession.username}) • 
+              Admin: <strong className="text-slate-200">{currentSession.name}</strong> ({currentSession.username}) •
               Active Shift: <span className="text-amber-400 font-bold ml-1">{currentShift.shiftName} ({currentShift.shiftId})</span>
             </p>
           </div>
@@ -460,11 +460,10 @@ export const AdminApp = () => {
               <button
                 key={p.id}
                 onClick={() => setPeriodType(p.id)}
-                className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${
-                  periodType === p.id
+                className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${periodType === p.id
                     ? 'bg-rose-600 text-white border-rose-500 shadow'
                     : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
-                }`}
+                  }`}
               >
                 {p.label}
               </button>
@@ -497,11 +496,10 @@ export const AdminApp = () => {
             <button
               key="ALL"
               onClick={() => setFilterBranch("ALL")}
-              className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${
-                filterBranch === "ALL"
+              className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${filterBranch === "ALL"
                   ? 'bg-rose-600 text-white border-rose-500 shadow'
                   : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
-              }`}
+                }`}
             >
               All Branches
             </button>
@@ -509,11 +507,10 @@ export const AdminApp = () => {
               <button
                 key={b.id}
                 onClick={() => setFilterBranch(b.id)}
-                className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${
-                  filterBranch === b.id
+                className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${filterBranch === b.id
                     ? 'bg-rose-600 text-white border-rose-500 shadow'
                     : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
-                }`}
+                  }`}
               >
                 {b.name}
               </button>
@@ -526,11 +523,10 @@ export const AdminApp = () => {
               <button
                 key={s}
                 onClick={() => setFilterShift(s)}
-                className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${
-                  filterShift === s
+                className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${filterShift === s
                     ? 'bg-rose-600 text-white border-rose-500 shadow'
                     : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
-                }`}
+                  }`}
               >
                 {s === 'ALL' ? 'All Shifts' : `${s} Shift`}
               </button>
@@ -558,11 +554,10 @@ export const AdminApp = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition flex items-center space-x-2 ${
-                activeTab === tab.id
+              className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition flex items-center space-x-2 ${activeTab === tab.id
                   ? 'bg-rose-600 text-white shadow-lg shadow-rose-900/50'
                   : 'text-slate-400 hover:text-white'
-              }`}
+                }`}
             >
               <Icon className="w-4 h-4" />
               <span>{tab.label}</span>
@@ -585,7 +580,7 @@ export const AdminApp = () => {
               <div className="text-2xl font-black text-white">{completedOrdersList.length}</div>
               <span className="text-[10px] text-slate-500 font-medium">Avg Value: PKR {avgOrderValue}</span>
             </div>
-            <div 
+            <div
               onClick={() => setActiveTab("shift_closing_reports")}
               className="bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-amber-500/50 p-5 rounded-3xl space-y-1 cursor-pointer transition"
             >
@@ -620,7 +615,7 @@ export const AdminApp = () => {
                 </h2>
                 <p className="text-xs text-slate-400">Manage orders, view shift tags, and perform direct Super Admin cancellations.</p>
               </div>
-              <button 
+              <button
                 onClick={() => setActiveTab("completed_archive")}
                 className="text-xs font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1 self-start sm:self-auto"
               >
@@ -682,9 +677,8 @@ export const AdminApp = () => {
                           </span>
                         </td>
                         <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                            order.payment === 'Paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${order.payment === 'Paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                            }`}>
                             {order.payment || 'Unpaid'}
                           </span>
                         </td>
@@ -693,13 +687,12 @@ export const AdminApp = () => {
                         </td>
                         <td className="p-3 font-extrabold text-white">PKR {order.totalAmount}</td>
                         <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded-full uppercase text-[10px] font-extrabold ${
-                            order.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
-                            order.status === 'preparing' ? 'bg-blue-500/20 text-blue-400' :
-                            order.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400' :
-                            order.status === 'served' ? 'bg-purple-500/20 text-purple-400' :
-                            order.status === 'completed' ? 'bg-slate-800 text-slate-400' : 'bg-rose-500/20 text-rose-400'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded-full uppercase text-[10px] font-extrabold ${order.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
+                              order.status === 'preparing' ? 'bg-blue-500/20 text-blue-400' :
+                                order.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400' :
+                                  order.status === 'served' ? 'bg-purple-500/20 text-purple-400' :
+                                    order.status === 'completed' ? 'bg-slate-800 text-slate-400' : 'bg-rose-500/20 text-rose-400'
+                            }`}>
                             {order.status}
                           </span>
                         </td>
@@ -852,7 +845,7 @@ export const AdminApp = () => {
                 Full historical log of all finished and paid orders with date, time, shift code, items, and customer info.
               </p>
             </div>
-            
+
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
               <input
@@ -960,11 +953,10 @@ export const AdminApp = () => {
                 <button
                   key={st}
                   onClick={() => setComplaintFilterStatus(st)}
-                  className={`px-3 py-1 text-xs font-bold rounded-xl transition border capitalize ${
-                    complaintFilterStatus === st
+                  className={`px-3 py-1 text-xs font-bold rounded-xl transition border capitalize ${complaintFilterStatus === st
                       ? 'bg-rose-600 text-white border-rose-500'
                       : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                  }`}
+                    }`}
                 >
                   {st}
                 </button>
@@ -1019,11 +1011,10 @@ export const AdminApp = () => {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                        c.status === 'resolved' 
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' 
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${c.status === 'resolved'
+                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                           : 'bg-rose-950 text-rose-400 border border-rose-800'
-                      }`}>
+                        }`}>
                         {c.status}
                       </span>
                       {c.status !== 'resolved' && (
@@ -1055,7 +1046,7 @@ export const AdminApp = () => {
                 Har Shift ka Mukammal closing record: Cash register handover, Total Sales, Orders Count aur Manager Notes.
               </p>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
@@ -1121,11 +1112,10 @@ export const AdminApp = () => {
                 <div key={rep.id} className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-3xl p-5 space-y-3 shadow-xl transition">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase ${
-                        rep.reportType === 'ShiftClosing'
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase ${rep.reportType === 'ShiftClosing'
                           ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                           : 'bg-amber-950 text-amber-400 border border-amber-800'
-                      }`}>
+                        }`}>
                         {rep.reportType === 'ShiftClosing' ? 'Shift Closing Handover' : 'Incident Log'}
                       </span>
                       <span className="font-extrabold text-slate-100 text-sm">{rep.shiftName || 'Shift'}</span>
@@ -1535,9 +1525,9 @@ export const AdminApp = () => {
           </div>
         </div>
       )}
-      
-      <ShiftChangeNotification 
-        previousShift={previousShift} 
+
+      <ShiftChangeNotification
+        previousShift={previousShift}
         currentShift={currentShift}
       />
     </div>
