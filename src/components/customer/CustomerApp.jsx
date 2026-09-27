@@ -70,9 +70,18 @@ export const CustomerApp = () => {
     (o.branchId === selectedBranch?.id || o.branch_id === selectedBranch?.id)
   );
 
-  // ACTIVE ORDERS (pending, preparing, ready) vs COMPLETED/PAST ORDERS
-  const activeTableOrders = allTableOrders.filter(o => o && o.status !== 'completed' && o.status !== 'cancelled');
-  const pastTableOrders = allTableOrders.filter(o => o && (o.status === 'completed' || o.status === 'cancelled'));
+  // ACTIVE ORDERS (pending, preparing, ready, served but UNPAID)
+  // When manager marks bill paid (payment === 'Paid' or status === 'completed'), the order immediately disappears from customer's active view!
+  const activeTableOrders = allTableOrders.filter(o => 
+    o && 
+    o.status !== 'completed' && 
+    o.status !== 'cancelled' && 
+    o.payment !== 'Paid'
+  );
+  const pastTableOrders = allTableOrders.filter(o => 
+    o && 
+    (o.status === 'completed' || o.status === 'cancelled' || o.payment === 'Paid')
+  );
 
   // Add Item to Cart
   const handleAddToCart = (item, variant = null) => {
@@ -411,14 +420,19 @@ export const CustomerApp = () => {
             {/* If no active orders currently running */}
             {activeTableOrders.length === 0 ? (
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-3 shadow-xl">
-                <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto animate-bounce" />
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
+                  <CheckCircle className="w-8 h-8" />
+                </div>
                 <h3 className="font-extrabold text-slate-100 text-sm">No Active Orders In Progress!</h3>
-                <p className="text-xs text-slate-400">All previous orders have been completed and served. Ready for your next delicious meal?</p>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  All previous orders have been completed and bill paid. Ready for your next delicious meal?
+                </p>
                 <button
                   onClick={() => setActiveTab("menu")}
-                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs rounded-2xl shadow-lg transition"
+                  className="px-6 py-2.5 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-xs rounded-2xl shadow-lg transition active:scale-95 inline-flex items-center space-x-2"
                 >
-                  Browse Menu & Place New Order
+                  <Utensils className="w-4 h-4" />
+                  <span>Browse Menu & Place New Order</span>
                 </button>
               </div>
             ) : (
@@ -457,26 +471,69 @@ export const CustomerApp = () => {
                       </div>
                     </div>
 
-                    {/* PROMINENT KITCHEN ESTIMATED PREPARATION TIME BANNER */}
-                    {estMins && order.status !== 'completed' && order.status !== 'cancelled' ? (
-                      <div className="bg-gradient-to-r from-amber-950/80 via-rose-950/80 to-slate-900 border border-amber-500/50 p-3 rounded-2xl flex items-center justify-between shadow-lg animate-pulse">
-                        <div className="flex items-center space-x-2 text-amber-300">
+                    {/* 1. If preparing: Show Kitchen Preparation Timer */}
+                    {order.status === 'preparing' && estMins ? (
+                      <div className="bg-gradient-to-r from-amber-950/80 via-rose-950/80 to-slate-900 border border-amber-500/50 p-3.5 rounded-2xl flex items-center justify-between shadow-lg">
+                        <div className="flex items-center space-x-2.5 text-amber-300">
                           <Clock className="w-5 h-5 text-amber-400 flex-shrink-0" />
                           <div>
                             <div className="text-[11px] font-bold uppercase tracking-wider text-amber-400">Kitchen Preparation Time:</div>
-                            <div className="text-xs text-slate-200 font-medium">Chef is preparing your meal</div>
+                            <div className="text-xs text-slate-200 font-medium">Chef is preparing your meal fresh</div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <span className="text-sm font-black text-amber-300 bg-amber-900/80 border border-amber-500/60 px-3 py-1 rounded-xl shadow inline-block">
+                          <span className="text-sm font-black text-amber-300 bg-amber-900/80 border border-amber-500/60 px-3 py-1.5 rounded-xl shadow inline-block">
                             ~{estMins} MINS
                           </span>
                         </div>
                       </div>
                     ) : order.status === 'pending' ? (
+                      /* 2. If pending: Show Kitchen received message */
                       <div className="bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-xs text-amber-400 flex items-center space-x-2">
                         <Clock className="w-4 h-4 flex-shrink-0 animate-spin" />
                         <span>Order received by kitchen. Chef will set estimated preparation time shortly...</span>
+                      </div>
+                    ) : order.status === 'ready' ? (
+                      /* 3. If ready: TIMER REMOVED! Show Order Ready Banner */
+                      <div className="bg-gradient-to-r from-emerald-950/90 via-slate-900 to-teal-950 border border-emerald-500/50 p-3.5 rounded-2xl flex items-center justify-between shadow-lg">
+                        <div className="flex items-center space-x-2.5 text-emerald-300">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                            <CheckCircle className="w-5 h-5 text-emerald-400" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black uppercase tracking-wider text-emerald-400">Order is Ready!</div>
+                            <div className="text-[11px] text-slate-300">Your meal is ready and is being served to your table now.</div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase whitespace-nowrap">
+                          Ready
+                        </span>
+                      </div>
+                    ) : order.status === 'served' ? (
+                      /* 4. If served: TIMER REMOVED! Show Served Banner & PROMINENT BILL UNPAID OPTION */
+                      <div className="bg-gradient-to-r from-purple-950/90 via-slate-900 to-amber-950/80 border border-purple-500/40 p-3.5 rounded-2xl space-y-2 shadow-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2.5 text-purple-300">
+                            <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0 text-purple-400">
+                              <Utensils className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="text-xs font-black uppercase tracking-wider text-white">Order Served — Enjoy Your Meal!</div>
+                              <div className="text-[11px] text-slate-300">Delivered to Table {order.tableNumber}.</div>
+                            </div>
+                          </div>
+                          <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 uppercase tracking-wide">
+                            Bill: Unpaid
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950/90 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                          <span className="text-slate-400 font-medium">Total Bill to Pay:</span>
+                          <span className="text-base font-black text-amber-400">PKR {order.totalAmount}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 italic text-center">
+                          Please pay the bill to your server or at the cashier counter.
+                        </p>
                       </div>
                     ) : null}
 
@@ -490,9 +547,18 @@ export const CustomerApp = () => {
                       ))}
                     </div>
 
-                    <div className="border-t border-slate-800 pt-2 flex justify-between items-center text-xs">
-                      <span className="text-slate-400 font-medium">Total Bill Amount:</span>
-                      <span className="text-base font-extrabold text-rose-400">PKR {order.totalAmount}</span>
+                    <div className="border-t border-slate-800 pt-2.5 flex justify-between items-center text-xs">
+                      <div>
+                        <span className="text-slate-400 font-medium">Total Bill: </span>
+                        <span className="text-base font-extrabold text-rose-400 ml-1">PKR {order.totalAmount}</span>
+                      </div>
+                      <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase border ${
+                        order.payment === 'Paid' 
+                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' 
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      }`}>
+                        {order.payment === 'Paid' ? '✓ Paid' : 'Bill: Unpaid'}
+                      </span>
                     </div>
                   </div>
                 );
