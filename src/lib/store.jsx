@@ -550,213 +550,211 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => { localStorage.setItem('mirchi_active_sessions', JSON.stringify(activeSessions)); }, [activeSessions]);
 
-  useEffect(() => {
+  const queueOfflineOrder = (order) => {
+    try {
+      const raw = localStorage.getItem('mirchi_pending_sync_queue');
+      const queue = raw ? JSON.parse(raw) : [];
+      if (!queue.some(item => item.id === order.id)) {
+        queue.push({
+          ...order,
+          retries: 0,
+          queuedAt: Date.now(),
+          nextRetryAt: Date.now()
+        });
+        localStorage.setItem('mirchi_pending_sync_queue', JSON.stringify(queue));
+      }
+    } catch {}
+  };
+
+  const loadSupabaseData = async () => {
     if (!isSupabaseConfigured) return;
+    try {
+      const [
+        { data: ordersData, error: ordersErr },
+        { data: complaintsData },
+        { data: waiterCallsData },
+        { data: helpCallsData },
+        { data: reportsData },
+        { data: auditData }
+      ] = await Promise.all([
+        supabase.from('orders').select('*, order_items(*)').order('created_at', { ascending: false }),
+        supabase.from('complaints').select('*').order('created_at', { ascending: false }),
+        supabase.from('waiter_calls').select('*').order('created_at', { ascending: false }),
+        supabase.from('help_calls').select('*').order('created_at', { ascending: false }),
+        supabase.from('branch_reports').select('*').order('created_at', { ascending: false }),
+        supabase.from('order_audit_logs').select('*').order('created_at', { ascending: false })
+      ]);
 
-    const queueOfflineOrder = (order) => {
-      try {
-        const raw = localStorage.getItem('mirchi_pending_sync_queue');
-        const queue = raw ? JSON.parse(raw) : [];
-        // Prevent duplicate queuing of same order ID
-        if (!queue.some(item => item.id === order.id)) {
-          queue.push({
-            ...order,
-            retries: 0,
-            queuedAt: Date.now(),
-            nextRetryAt: Date.now()
+      if (ordersErr) {
+        console.warn("Error querying orders with items:", ordersErr);
+      }
+
+      if (ordersData && ordersData.length > 0) {
+        const realOrders = ordersData
+          .filter(o => o && !String(o.id).includes('seed') && !String(o.id).startsWith('seed-'))
+          .map(normalizeOrder);
+
+        setOrders(prev => {
+          const merged = mergeById(prev, realOrders, normalizeOrder);
+          try { localStorage.setItem('mirchi_orders', JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+
+        const maxNum = Math.max(0, ...realOrders.map(o => Number(o.orderNumber || o.order_number) || 0));
+        if (maxNum > 0) {
+          setOrderCounter(prev => {
+            const higher = Math.max(prev, maxNum);
+            try { localStorage.setItem('mirchi_order_counter', String(higher)); } catch {}
+            return higher;
           });
-          localStorage.setItem('mirchi_pending_sync_queue', JSON.stringify(queue));
         }
-      } catch {}
-    };
+      }
+      if (complaintsData && complaintsData.length > 0) {
+        const realComplaints = complaintsData.filter(c => c && !String(c.id).includes('seed') && !String(c.id).startsWith('seed-'));
+        setComplaints(prev => {
+          const merged = mergeById(prev, realComplaints, normalizeComplaint);
+          try { localStorage.setItem('mirchi_complaints', JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      }
+      if (waiterCallsData && waiterCallsData.length > 0) {
+        const realWaiterCalls = waiterCallsData.filter(w => w && !String(w.id).includes('seed') && !String(w.id).startsWith('seed-'));
+        setWaiterCalls(prev => {
+          const merged = mergeById(prev, realWaiterCalls, normalizeWaiterCall);
+          try { localStorage.setItem('mirchi_waiter_calls', JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      }
+      if (helpCallsData && helpCallsData.length > 0) {
+        const realHelpCalls = helpCallsData.filter(h => h && !String(h.id).includes('seed') && !String(h.id).startsWith('seed-'));
+        setHelpCalls(prev => {
+          const merged = mergeById(prev, realHelpCalls, normalizeHelpCall);
+          try { localStorage.setItem('mirchi_help_calls', JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      }
+      if (reportsData && reportsData.length > 0) {
+        const normReports = reportsData
+          .filter(r => r && !String(r.id).includes('seed') && !String(r.id).startsWith('seed-'))
+          .map(r => ({
+            id: r.id,
+            branchId: BRANCH_SLUG_MAP[r.branch_id] || r.branch_id,
+            branch_id: r.branch_id,
+            managerName: r.manager_name,
+            shiftName: r.shift_name,
+            shiftType: r.shift_type || 'Evening',
+            shiftId: r.shift_id,
+            reportType: r.report_type,
+            totalShiftSales: Number(r.total_shift_sales || 0),
+            totalOrdersCount: Number(r.total_orders_count || 0),
+            cancelledOrdersCount: Number(r.cancelled_orders_count || 0),
+            content: r.content,
+            createdAt: r.created_at
+          }));
+        setBranchReports(prev => {
+          const merged = mergeById(prev, normReports);
+          try { localStorage.setItem('mirchi_branch_reports', JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      }
+      if (auditData && auditData.length > 0) {
+        const normAudits = auditData
+          .filter(a => a && !String(a.id).includes('seed') && !String(a.id).startsWith('seed-'))
+          .map(a => ({
+            id: a.id,
+            orderId: a.order_id,
+            branchId: BRANCH_SLUG_MAP[a.branch_id] || a.branch_id,
+            branch_id: a.branch_id,
+            performedBy: a.performed_by,
+            role: a.role,
+            actionType: a.action_type,
+            details: a.details,
+            shiftType: a.shift_type,
+            shiftId: a.shift_id,
+            createdAt: a.created_at
+          }));
+        setAuditLogs(prev => {
+          const merged = mergeById(prev, normAudits);
+          try { localStorage.setItem('mirchi_audit_logs', JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      }
+    } catch (err) {
+      console.error("Error loading Supabase data:", err);
+    }
+  };
 
-    const processOfflineQueue = async () => {
-      if (!isSupabaseConfigured || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
-      try {
-        const raw = localStorage.getItem('mirchi_pending_sync_queue');
-        if (!raw) return;
-        const queue = JSON.parse(raw);
-        if (!Array.isArray(queue) || queue.length === 0) return;
+  const processOfflineQueue = async () => {
+    if (!isSupabaseConfigured || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+    try {
+      const raw = localStorage.getItem('mirchi_pending_sync_queue');
+      if (!raw) return;
+      const queue = JSON.parse(raw);
+      if (!Array.isArray(queue) || queue.length === 0) return;
 
-        const now = Date.now();
-        const remaining = [];
-        let anySynced = false;
+      const now = Date.now();
+      const remaining = [];
+      let anySynced = false;
 
-        for (const ord of queue) {
-          // Check exponential backoff timestamp
-          if (ord.nextRetryAt && ord.nextRetryAt > now) {
-            remaining.push(ord);
-            continue;
-          }
+      for (const ord of queue) {
+        if (ord.nextRetryAt && ord.nextRetryAt > now) {
+          remaining.push(ord);
+          continue;
+        }
 
-          try {
-            const branchUuid = getBranchUuid(ord.branchId || ord.branch_id);
-            const tableUuid = getTableUuid(ord.branchId || ord.branch_id, ord.tableNumber || ord.table_number);
-            
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error("SYNC_TIMEOUT_8S")), 8000)
-            );
-            const insertPromise = supabase.from('orders').insert({
-              restaurant_id: RESTAURANT_ID,
-              branch_id: branchUuid,
-              table_id: tableUuid,
-              table_number: Number(ord.tableNumber || ord.table_number || 4),
-              status: ord.status || 'pending',
-              total_amount: Number(ord.totalAmount || ord.total_amount || 0),
-              notes: ord.notes || ''
-            }).select();
+        try {
+          const branchUuid = getBranchUuid(ord.branchId || ord.branch_id);
+          const tableUuid = getTableUuid(ord.branchId || ord.branch_id, ord.tableNumber || ord.table_number);
+          
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("SYNC_TIMEOUT_8S")), 8000)
+          );
+          const insertPromise = supabase.from('orders').insert({
+            restaurant_id: RESTAURANT_ID,
+            branch_id: branchUuid,
+            table_id: tableUuid,
+            table_number: Number(ord.tableNumber || ord.table_number || 4),
+            status: ord.status || 'pending',
+            total_amount: Number(ord.totalAmount || ord.total_amount || 0),
+            notes: ord.notes || ''
+          }).select();
 
-            const { data: dbOrder, error } = await Promise.race([insertPromise, timeoutPromise]);
+          const { data: dbOrder, error } = await Promise.race([insertPromise, timeoutPromise]);
 
-            if (!error && dbOrder && dbOrder[0]) {
-              anySynced = true;
-              if (Array.isArray(ord.items) && ord.items.length > 0) {
-                const dbItems = ord.items.map(i => ({
-                  order_id: dbOrder[0].id,
-                  item_name: sanitizeTextInput(i.name || 'Item', 120),
-                  variant_name: i.variantName ? sanitizeTextInput(i.variantName, 60) : null,
-                  unit_price: Number(i.unitPrice || 0),
-                  quantity: Number(i.quantity || 1),
-                  subtotal: Number(i.subtotal || 0),
-                  special_notes: sanitizeTextInput(i.specialNotes || '', 150)
-                }));
-                await supabase.from('order_items').insert(dbItems);
-              }
-            } else {
-              const retries = (ord.retries || 0) + 1;
-              const delay = Math.min(60000, Math.pow(2, retries) * 1500);
-              remaining.push({ ...ord, retries, nextRetryAt: now + delay });
+          if (!error && dbOrder && dbOrder[0]) {
+            anySynced = true;
+            if (Array.isArray(ord.items) && ord.items.length > 0) {
+              const dbItems = ord.items.map(i => ({
+                order_id: dbOrder[0].id,
+                item_name: sanitizeTextInput(i.name || 'Item', 120),
+                variant_name: i.variantName ? sanitizeTextInput(i.variantName, 60) : null,
+                unit_price: Number(i.unitPrice || 0),
+                quantity: Number(i.quantity || 1),
+                subtotal: Number(i.subtotal || 0),
+                special_notes: sanitizeTextInput(i.specialNotes || '', 150)
+              }));
+              await supabase.from('order_items').insert(dbItems);
             }
-          } catch {
+          } else {
             const retries = (ord.retries || 0) + 1;
             const delay = Math.min(60000, Math.pow(2, retries) * 1500);
             remaining.push({ ...ord, retries, nextRetryAt: now + delay });
           }
+        } catch {
+          const retries = (ord.retries || 0) + 1;
+          const delay = Math.min(60000, Math.pow(2, retries) * 1500);
+          remaining.push({ ...ord, retries, nextRetryAt: now + delay });
         }
-        localStorage.setItem('mirchi_pending_sync_queue', JSON.stringify(remaining));
-        if (anySynced) {
-          loadSupabaseData();
-        }
-      } catch {}
-    };
-
-    const loadSupabaseData = async () => {
-      try {
-        const [
-          { data: ordersData, error: ordersErr },
-          { data: complaintsData },
-          { data: waiterCallsData },
-          { data: helpCallsData },
-          { data: reportsData },
-          { data: auditData }
-        ] = await Promise.all([
-          supabase.from('orders').select('*, order_items(*)').order('created_at', { ascending: false }),
-          supabase.from('complaints').select('*').order('created_at', { ascending: false }),
-          supabase.from('waiter_calls').select('*').order('created_at', { ascending: false }),
-          supabase.from('help_calls').select('*').order('created_at', { ascending: false }),
-          supabase.from('branch_reports').select('*').order('created_at', { ascending: false }),
-          supabase.from('order_audit_logs').select('*').order('created_at', { ascending: false })
-        ]);
-
-        if (ordersErr) {
-          console.warn("Error querying orders with items, retrying standard select:", ordersErr);
-        }
-
-        if (ordersData && ordersData.length > 0) {
-          const realOrders = ordersData
-            .filter(o => o && !String(o.id).includes('seed') && !String(o.id).startsWith('seed-'))
-            .map(normalizeOrder);
-
-          setOrders(prev => {
-            const merged = mergeById(prev, realOrders, normalizeOrder);
-            try { localStorage.setItem('mirchi_orders', JSON.stringify(merged)); } catch {}
-            return merged;
-          });
-
-          // Sync order counter with highest order number in database
-          const maxNum = Math.max(0, ...realOrders.map(o => Number(o.orderNumber || o.order_number) || 0));
-          if (maxNum > 0) {
-            setOrderCounter(prev => {
-              const higher = Math.max(prev, maxNum);
-              try { localStorage.setItem('mirchi_order_counter', String(higher)); } catch {}
-              return higher;
-            });
-          }
-        }
-        if (complaintsData && complaintsData.length > 0) {
-          const realComplaints = complaintsData.filter(c => c && !String(c.id).includes('seed') && !String(c.id).startsWith('seed-'));
-          setComplaints(prev => {
-            const merged = mergeById(prev, realComplaints, normalizeComplaint);
-            try { localStorage.setItem('mirchi_complaints', JSON.stringify(merged)); } catch {}
-            return merged;
-          });
-        }
-        if (waiterCallsData && waiterCallsData.length > 0) {
-          const realWaiterCalls = waiterCallsData.filter(w => w && !String(w.id).includes('seed') && !String(w.id).startsWith('seed-'));
-          setWaiterCalls(prev => {
-            const merged = mergeById(prev, realWaiterCalls, normalizeWaiterCall);
-            try { localStorage.setItem('mirchi_waiter_calls', JSON.stringify(merged)); } catch {}
-            return merged;
-          });
-        }
-        if (helpCallsData && helpCallsData.length > 0) {
-          const realHelpCalls = helpCallsData.filter(h => h && !String(h.id).includes('seed') && !String(h.id).startsWith('seed-'));
-          setHelpCalls(prev => {
-            const merged = mergeById(prev, realHelpCalls, normalizeHelpCall);
-            try { localStorage.setItem('mirchi_help_calls', JSON.stringify(merged)); } catch {}
-            return merged;
-          });
-        }
-        if (reportsData && reportsData.length > 0) {
-          const normReports = reportsData
-            .filter(r => r && !String(r.id).includes('seed') && !String(r.id).startsWith('seed-'))
-            .map(r => ({
-              id: r.id,
-              branchId: BRANCH_SLUG_MAP[r.branch_id] || r.branch_id,
-              branch_id: r.branch_id,
-              managerName: r.manager_name,
-              shiftName: r.shift_name,
-              shiftType: r.shift_type || 'Evening',
-              shiftId: r.shift_id,
-              reportType: r.report_type,
-              totalShiftSales: Number(r.total_shift_sales || 0),
-              totalOrdersCount: Number(r.total_orders_count || 0),
-              cancelledOrdersCount: Number(r.cancelled_orders_count || 0),
-              content: r.content,
-              createdAt: r.created_at
-            }));
-          setBranchReports(prev => {
-            const merged = mergeById(prev, normReports);
-            try { localStorage.setItem('mirchi_branch_reports', JSON.stringify(merged)); } catch {}
-            return merged;
-          });
-        }
-        if (auditData && auditData.length > 0) {
-          const normAudits = auditData
-            .filter(a => a && !String(a.id).includes('seed') && !String(a.id).startsWith('seed-'))
-            .map(a => ({
-              id: a.id,
-              orderId: a.order_id,
-              branchId: BRANCH_SLUG_MAP[a.branch_id] || a.branch_id,
-              branch_id: a.branch_id,
-              performedBy: a.performed_by,
-              role: a.role,
-              actionType: a.action_type,
-              details: a.details,
-              shiftType: a.shift_type,
-              shiftId: a.shift_id,
-              createdAt: a.created_at
-            }));
-          setAuditLogs(prev => {
-            const merged = mergeById(prev, normAudits);
-            try { localStorage.setItem('mirchi_audit_logs', JSON.stringify(merged)); } catch {}
-            return merged;
-          });
-        }
-      } catch (err) {
-        console.error("Error loading Supabase data:", err);
       }
-    };
+      localStorage.setItem('mirchi_pending_sync_queue', JSON.stringify(remaining));
+      if (anySynced) {
+        loadSupabaseData();
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
 
     loadSupabaseData();
     processOfflineQueue();

@@ -43,31 +43,31 @@ export default function App() {
               <Route
                 path="/kitchen"
                 element={
-                  <ProtectedRoute role="kitchen">
-                    <ErrorBoundary sectionName="Kitchen Display System">
+                  <ErrorBoundary sectionName="Kitchen Display System">
+                    <ProtectedRoute role="kitchen">
                       <KitchenApp />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
+                    </ProtectedRoute>
+                  </ErrorBoundary>
                 }
               />
               <Route
                 path="/manager"
                 element={
-                  <ProtectedRoute role="manager">
-                    <ErrorBoundary sectionName="Manager Control Panel">
+                  <ErrorBoundary sectionName="Manager Control Panel">
+                    <ProtectedRoute role="manager">
                       <ManagerApp />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
+                    </ProtectedRoute>
+                  </ErrorBoundary>
                 }
               />
               <Route
                 path="/admin"
                 element={
-                  <ProtectedRoute role="admin">
-                    <ErrorBoundary sectionName="Admin Super Portal">
+                  <ErrorBoundary sectionName="Admin Super Portal">
+                    <ProtectedRoute role="admin">
                       <AdminApp />
-                    </ErrorBoundary>
-                  </ProtectedRoute>
+                    </ProtectedRoute>
+                  </ErrorBoundary>
                 }
               />
               <Route path="*" element={<Navigate to="/" replace />} />

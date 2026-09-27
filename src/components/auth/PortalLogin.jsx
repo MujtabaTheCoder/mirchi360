@@ -32,8 +32,8 @@ const PORTAL = {
 
 export const PortalLogin = ({ expectedRole, blockedSession }) => {
   const { loginStaff, logoutStaff, selectedBranch, currentSession } = useApp();
-  const cfg = PORTAL[expectedRole];
-  const Icon = cfg.icon;
+  const cfg = PORTAL[expectedRole] || PORTAL.kitchen;
+  const Icon = cfg?.icon || ChefHat;
   const navigate = useNavigate();
 
   const [username, setUsername] = useState("");
