@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  ChefHat, Clock, Printer, CheckCircle, Flame, 
+  ChefHat, Clock, Printer, CheckCircle, CheckCircle2, Flame, 
   Lock, Slash, Bell, X, Phone
 } from 'lucide-react';
 import { useApp, getCurrentShift, formatPakistanTime } from '../../lib/store';
@@ -17,6 +17,7 @@ export const KitchenApp = () => {
     currentSession, 
     orders, 
     updateOrderStatus, 
+    markOrderServed,
     modifyOrderWithPrivacyPin, 
     sendKitchenHelpCall, 
     menuItems, 
@@ -50,12 +51,8 @@ export const KitchenApp = () => {
   );
 
   useEffect(() => {
-    if (refreshOrders) {
-      refreshOrders();
-      const interval = setInterval(refreshOrders, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [refreshOrders]);
+    refreshOrders?.();
+  }, []);
 
   const prevCountRef = useRef(kitchenOrders.length);
   useEffect(() => {
@@ -260,19 +257,31 @@ export const KitchenApp = () => {
 
                     {/* Status Progression Buttons */}
                     <div className="flex flex-col gap-2 pt-1">
-                      {order.status === 'pending' ? (
+                      {order.status === 'pending' && (
                         <button
                           onClick={() => updateOrderStatus(order.id, 'preparing', 15)}
-                          className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-xl shadow min-h-[44px]"
+                          className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-xl shadow min-h-[44px] flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
                         >
+                          <Clock className="w-4 h-4" />
                           Start Preparing
                         </button>
-                      ) : (
+                      )}
+                      {order.status === 'preparing' && (
                         <button
                           onClick={() => updateOrderStatus(order.id, 'ready')}
-                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow min-h-[44px]"
+                          className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl shadow min-h-[44px] flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
                         >
+                          <CheckCircle className="w-4 h-4" />
                           Mark Order Ready
+                        </button>
+                      )}
+                      {order.status === 'ready' && (
+                        <button
+                          onClick={() => markOrderServed(order.id)}
+                          className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs rounded-xl shadow min-h-[44px] flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Mark Order Served
                         </button>
                       )}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

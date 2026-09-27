@@ -40,12 +40,8 @@ export const AdminApp = () => {
   } = useApp();
 
   useEffect(() => {
-    if (refreshOrders) {
-      refreshOrders();
-      const interval = setInterval(refreshOrders, 6000);
-      return () => clearInterval(interval);
-    }
-  }, [refreshOrders]);
+    refreshOrders?.();
+  }, []);
 
   const [activeTab, setActiveTab] = useState("overview");
 

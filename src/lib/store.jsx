@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { SEED_DATA } from './initialData';
 import { 
   supabase, 
@@ -566,8 +566,17 @@ export const AppProvider = ({ children }) => {
     } catch {}
   };
 
-  const loadSupabaseData = async () => {
+  const recentOrderUpdatesRef = useRef(new Map());
+  const isFetchingRef = useRef(false);
+  const pendingFetchRef = useRef(false);
+
+  const loadSupabaseData = useCallback(async () => {
     if (!isSupabaseConfigured) return;
+    if (isFetchingRef.current) {
+      pendingFetchRef.current = true;
+      return;
+    }
+    isFetchingRef.current = true;
     try {
       const [
         { data: ordersData, error: ordersErr },
@@ -594,37 +603,92 @@ export const AppProvider = ({ children }) => {
           .filter(o => o && !String(o.id).includes('seed') && !String(o.id).startsWith('seed-') && o.notes !== '[PURGED_DEMO]')
           .map(normalizeOrder);
 
-        setOrders(realOrders);
-        try { localStorage.setItem('mirchi_orders', JSON.stringify(realOrders)); } catch {}
+        const now = Date.now();
+        const mergedOrders = realOrders.map(dbOrder => {
+          const pending = recentOrderUpdatesRef.current.get(dbOrder.id);
+          if (pending) {
+            if (now - pending.timestamp < 15000) {
+              if (dbOrder.status === pending.status && (!pending.payment || dbOrder.payment === pending.payment)) {
+                recentOrderUpdatesRef.current.delete(dbOrder.id);
+                return dbOrder;
+              } else {
+                return {
+                  ...dbOrder,
+                  status: pending.status || dbOrder.status,
+                  payment: pending.payment || dbOrder.payment,
+                  estimatedMinutes: pending.estimatedMinutes !== undefined ? pending.estimatedMinutes : dbOrder.estimatedMinutes
+                };
+              }
+            } else {
+              recentOrderUpdatesRef.current.delete(dbOrder.id);
+            }
+          }
+          return dbOrder;
+        });
 
-        const maxNum = Math.max(0, ...realOrders.map(o => Number(o.orderNumber || o.order_number) || 0));
-        setOrderCounter(maxNum);
-        try { localStorage.setItem('mirchi_order_counter', String(maxNum)); } catch {}
+        setOrders(prev => {
+          if (prev.length === mergedOrders.length) {
+            const isSame = prev.every((p, idx) => {
+              const m = mergedOrders[idx];
+              return m &&
+                p.id === m.id &&
+                p.status === m.status &&
+                p.payment === m.payment &&
+                p.totalAmount === m.totalAmount &&
+                p.estimatedMinutes === m.estimatedMinutes &&
+                p.notes === m.notes &&
+                (p.items?.length || 0) === (m.items?.length || 0);
+            });
+            if (isSame) return prev;
+          }
+          try { localStorage.setItem('mirchi_orders', JSON.stringify(mergedOrders)); } catch {}
+          return mergedOrders;
+        });
+
+        const maxNum = Math.max(0, ...mergedOrders.map(o => Number(o.orderNumber || o.order_number) || 0));
+        setOrderCounter(prev => {
+          if (prev === maxNum) return prev;
+          try { localStorage.setItem('mirchi_order_counter', String(maxNum)); } catch {}
+          return maxNum;
+        });
       }
+
       if (complaintsData && complaintsData.length > 0) {
         const realComplaints = complaintsData.filter(c => c && !String(c.id).includes('seed') && !String(c.id).startsWith('seed-'));
         setComplaints(prev => {
           const merged = mergeById(prev, realComplaints, normalizeComplaint);
+          if (prev.length === merged.length && prev.every((p, idx) => p.id === merged[idx].id && p.status === merged[idx].status)) {
+            return prev;
+          }
           try { localStorage.setItem('mirchi_complaints', JSON.stringify(merged)); } catch {}
           return merged;
         });
       }
+
       if (waiterCallsData && waiterCallsData.length > 0) {
         const realWaiterCalls = waiterCallsData.filter(w => w && !String(w.id).includes('seed') && !String(w.id).startsWith('seed-'));
         setWaiterCalls(prev => {
           const merged = mergeById(prev, realWaiterCalls, normalizeWaiterCall);
+          if (prev.length === merged.length && prev.every((p, idx) => p.id === merged[idx].id && p.status === merged[idx].status)) {
+            return prev;
+          }
           try { localStorage.setItem('mirchi_waiter_calls', JSON.stringify(merged)); } catch {}
           return merged;
         });
       }
+
       if (helpCallsData && helpCallsData.length > 0) {
         const realHelpCalls = helpCallsData.filter(h => h && !String(h.id).includes('seed') && !String(h.id).startsWith('seed-'));
         setHelpCalls(prev => {
           const merged = mergeById(prev, realHelpCalls, normalizeHelpCall);
+          if (prev.length === merged.length && prev.every((p, idx) => p.id === merged[idx].id && p.status === merged[idx].status)) {
+            return prev;
+          }
           try { localStorage.setItem('mirchi_help_calls', JSON.stringify(merged)); } catch {}
           return merged;
         });
       }
+
       if (reportsData && reportsData.length > 0) {
         const normReports = reportsData
           .filter(r => r && !String(r.id).includes('seed') && !String(r.id).startsWith('seed-'))
@@ -645,10 +709,14 @@ export const AppProvider = ({ children }) => {
           }));
         setBranchReports(prev => {
           const merged = mergeById(prev, normReports);
+          if (prev.length === merged.length && prev.every((p, idx) => p.id === merged[idx].id)) {
+            return prev;
+          }
           try { localStorage.setItem('mirchi_branch_reports', JSON.stringify(merged)); } catch {}
           return merged;
         });
       }
+
       if (auditData && auditData.length > 0) {
         const normAudits = auditData
           .filter(a => a && !String(a.id).includes('seed') && !String(a.id).startsWith('seed-'))
@@ -667,14 +735,23 @@ export const AppProvider = ({ children }) => {
           }));
         setAuditLogs(prev => {
           const merged = mergeById(prev, normAudits);
+          if (prev.length === merged.length && prev.every((p, idx) => p.id === merged[idx].id)) {
+            return prev;
+          }
           try { localStorage.setItem('mirchi_audit_logs', JSON.stringify(merged)); } catch {}
           return merged;
         });
       }
     } catch (err) {
       console.error("Error loading Supabase data:", err);
+    } finally {
+      isFetchingRef.current = false;
+      if (pendingFetchRef.current) {
+        pendingFetchRef.current = false;
+        loadSupabaseData();
+      }
     }
-  };
+  }, []);
 
   const processOfflineQueue = async () => {
     if (!isSupabaseConfigured || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
@@ -1181,72 +1258,110 @@ export const AppProvider = ({ children }) => {
     return newOrder;
   };
 
-  const updateOrderStatus = (orderId, newStatus, estimatedMinutes = null) => {
-    const updated = orders.map(order => {
-      if (order.id === orderId) {
-        return normalizeOrder({
-          ...order,
+  const updateOrderStatus = async (orderId, newStatus, estimatedMinutes = null) => {
+    recentOrderUpdatesRef.current.set(orderId, {
+      status: newStatus,
+      estimatedMinutes: estimatedMinutes !== null ? Number(estimatedMinutes) : undefined,
+      timestamp: Date.now()
+    });
+
+    setOrders(prev => {
+      const updated = prev.map(order => {
+        if (order.id === orderId) {
+          return normalizeOrder({
+            ...order,
+            status: newStatus,
+            estimatedMinutes: estimatedMinutes !== null ? Number(estimatedMinutes) : order.estimatedMinutes
+          });
+        }
+        return order;
+      });
+      broadcastSync('SYNC_ORDERS', updated);
+      try { localStorage.setItem('mirchi_orders', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('orders').update({
           status: newStatus,
-          estimatedMinutes: estimatedMinutes !== null ? Number(estimatedMinutes) : order.estimatedMinutes
-        });
+          updated_at: new Date().toISOString(),
+          ...(estimatedMinutes !== null ? { estimated_minutes: Number(estimatedMinutes) } : {})
+        }).eq('id', orderId);
+      } catch (err) {
+        console.error("Failed to update order status in Supabase:", err);
       }
-      return order;
-    });
-
-    setOrders(updated);
-    broadcastSync('SYNC_ORDERS', updated);
-
-    if (isSupabaseConfigured) {
-      supabase.from('orders').update({
-        status: newStatus,
-        ...(estimatedMinutes !== null ? { estimated_minutes: Number(estimatedMinutes) } : {})
-      }).eq('id', orderId).then(() => {});
     }
   };
 
-  const markOrderServed = (orderId) => {
-    const updated = orders.map(order => {
-      if (order.id === orderId) {
-        return normalizeOrder({
-          ...order,
+  const markOrderServed = async (orderId) => {
+    recentOrderUpdatesRef.current.set(orderId, {
+      status: 'served',
+      payment: 'Unpaid',
+      timestamp: Date.now()
+    });
+
+    setOrders(prev => {
+      const updated = prev.map(order => {
+        if (order.id === orderId) {
+          return normalizeOrder({
+            ...order,
+            status: 'served',
+            payment: 'Unpaid'
+          });
+        }
+        return order;
+      });
+      broadcastSync('SYNC_ORDERS', updated);
+      try { localStorage.setItem('mirchi_orders', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('orders').update({
           status: 'served',
-          payment: 'Unpaid'
-        });
+          updated_at: new Date().toISOString()
+        }).eq('id', orderId);
+      } catch (err) {
+        console.error("Failed to mark order served in Supabase:", err);
       }
-      return order;
-    });
-
-    setOrders(updated);
-    broadcastSync('SYNC_ORDERS', updated);
-
-    if (isSupabaseConfigured) {
-      supabase.from('orders').update({
-        status: 'served',
-        updated_at: new Date().toISOString()
-      }).eq('id', orderId).then(() => {});
     }
   };
 
-  const markOrderPaid = (orderId) => {
-    const updated = orders.map(order => {
-      if (order.id === orderId) {
-        return normalizeOrder({
-          ...order,
-          status: 'completed',
-          payment: 'Paid'
-        });
-      }
-      return order;
+  const markOrderPaid = async (orderId) => {
+    recentOrderUpdatesRef.current.set(orderId, {
+      status: 'completed',
+      payment: 'Paid',
+      timestamp: Date.now()
     });
 
-    setOrders(updated);
-    broadcastSync('SYNC_ORDERS', updated);
+    setOrders(prev => {
+      const updated = prev.map(order => {
+        if (order.id === orderId) {
+          return normalizeOrder({
+            ...order,
+            status: 'completed',
+            payment: 'Paid'
+          });
+        }
+        return order;
+      });
+      broadcastSync('SYNC_ORDERS', updated);
+      try { localStorage.setItem('mirchi_orders', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
 
     if (isSupabaseConfigured) {
-      supabase.from('orders').update({
-        status: 'completed',
-        updated_at: new Date().toISOString()
-      }).eq('id', orderId).then(() => {});
+      try {
+        await supabase.from('orders').update({
+          status: 'completed',
+          payment: 'Paid',
+          updated_at: new Date().toISOString()
+        }).eq('id', orderId);
+      } catch (err) {
+        console.error("Failed to mark order paid in Supabase:", err);
+      }
     }
   };
 
@@ -1256,17 +1371,28 @@ export const AppProvider = ({ children }) => {
     }
 
     const currentShift = getCurrentShift();
-    let updated;
-    if (actionType === 'CANCEL') {
-      updated = orders.map(o => o.id === orderId ? normalizeOrder({ ...o, status: 'cancelled' }) : o);
-    } else if (actionType === 'EDIT') {
-      updated = orders.map(o => o.id === orderId ? normalizeOrder({ ...o, ...modifications }) : o);
-    } else {
-      updated = orders;
+    const newStatus = actionType === 'CANCEL' ? 'cancelled' : (modifications?.status || undefined);
+
+    if (newStatus) {
+      recentOrderUpdatesRef.current.set(orderId, {
+        status: newStatus,
+        timestamp: Date.now()
+      });
     }
 
-    setOrders(updated);
-    broadcastSync('SYNC_ORDERS', updated);
+    setOrders(prev => {
+      let updated;
+      if (actionType === 'CANCEL') {
+        updated = prev.map(o => o.id === orderId ? normalizeOrder({ ...o, status: 'cancelled' }) : o);
+      } else if (actionType === 'EDIT') {
+        updated = prev.map(o => o.id === orderId ? normalizeOrder({ ...o, ...modifications }) : o);
+      } else {
+        updated = prev;
+      }
+      broadcastSync('SYNC_ORDERS', updated);
+      try { localStorage.setItem('mirchi_orders', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
 
     const auditEntry = {
       id: `aud-${Date.now()}`,
@@ -1297,7 +1423,7 @@ export const AppProvider = ({ children }) => {
         order_id: auditEntry.orderId,
         performed_by: auditEntry.performedBy,
         role: auditEntry.role,
-        action_type: auditEntry.actionType,
+        action_type: actionType,
         details: auditEntry.details,
         shift_type: auditEntry.shiftType,
         shift_id: auditEntry.shiftId,
@@ -1566,50 +1692,69 @@ export const AppProvider = ({ children }) => {
     return currentSession.branchId || selectedBranch.id;
   };
 
+  const contextValue = useMemo(() => ({
+    selectedBranch,
+    setSelectedBranch,
+    selectedTableNumber,
+    setSelectedTableNumber,
+    currentSession,
+    authReady,
+    activeSessions,
+    currentShift,
+    previousShift,
+    orderCounter,
+    loginStaff,
+    logoutStaff,
+    verifyPrivacyPin,
+    menuItems,
+    orders,
+    complaints,
+    waiterCalls,
+    helpCalls,
+    branchReports,
+    auditLogs,
+    createOrder,
+    clearCustomerOrders,
+    clearAllOrders,
+    updateOrderStatus,
+    markOrderServed,
+    markOrderPaid,
+    modifyOrderWithPrivacyPin,
+    submitComplaint,
+    callWaiter,
+    sendKitchenHelpCall,
+    toggleItemStock,
+    saveMenuItem,
+    addBranchReport,
+    deleteBranchReport,
+    resolveComplaint,
+    resolveWaiterCall,
+    resolveHelpCall,
+    getEffectiveBranchId,
+    refreshOrders: loadSupabaseData,
+    loadSupabaseData,
+    branches: SEED_DATA.branches
+  }), [
+    selectedBranch,
+    selectedTableNumber,
+    currentSession,
+    authReady,
+    activeSessions,
+    currentShift,
+    previousShift,
+    orderCounter,
+    menuItems,
+    orders,
+    complaints,
+    waiterCalls,
+    helpCalls,
+    branchReports,
+    auditLogs,
+    loadSupabaseData
+  ]);
+
   return (
-    <AppContext.Provider value={{
-      selectedBranch,
-      setSelectedBranch,
-      selectedTableNumber,
-      setSelectedTableNumber,
-      currentSession,
-      authReady,
-      activeSessions,
-      currentShift,
-      previousShift,
-      orderCounter,
-      loginStaff,
-      logoutStaff,
-      verifyPrivacyPin,
-      menuItems,
-      orders,
-      complaints,
-      waiterCalls,
-      helpCalls,
-      branchReports,
-      auditLogs,
-      createOrder,
-      clearCustomerOrders,
-      clearAllOrders,
-      updateOrderStatus,
-      markOrderServed,
-      markOrderPaid,
-      modifyOrderWithPrivacyPin,
-      submitComplaint,
-      callWaiter,
-      sendKitchenHelpCall,
-      toggleItemStock,
-      saveMenuItem,
-      addBranchReport,
-      deleteBranchReport,
-      resolveComplaint,
-      resolveWaiterCall,
-      resolveHelpCall,
-      getEffectiveBranchId,
-      refreshOrders: loadSupabaseData,
-      loadSupabaseData,
-      branches: SEED_DATA.branches
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );
