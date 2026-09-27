@@ -1,2 +1,8 @@
+node_modules/
 # Local Netlify folder
 .netlify
+
+.vercel
+.env*
+mirchi-admin-fix/
+*.timestamp-*.mjs

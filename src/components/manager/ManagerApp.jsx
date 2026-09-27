@@ -31,11 +31,20 @@ export const ManagerApp = () => {
     menuItems, 
     toggleItemStock, 
     getEffectiveBranchId,
+    refreshOrders,
     currentShift,
     previousShift
   } = useApp();
 
   const effectiveBranchId = getEffectiveBranchId();
+
+  useEffect(() => {
+    if (refreshOrders) {
+      refreshOrders();
+      const interval = setInterval(refreshOrders, 6000);
+      return () => clearInterval(interval);
+    }
+  }, [refreshOrders]);
 
   const [activeTab, setActiveTab] = useState("live");
   const [printingOrder, setPrintingOrder] = useState(null);

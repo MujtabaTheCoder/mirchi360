@@ -21,6 +21,7 @@ export const KitchenApp = () => {
     menuItems, 
     toggleItemStock, 
     getEffectiveBranchId,
+    refreshOrders,
     currentShift,
     previousShift
   } = useApp();
@@ -41,11 +42,19 @@ export const KitchenApp = () => {
 
   const activeShift = getCurrentShift();
   const kitchenOrders = orders.filter(o => 
-    o.branchId === effectiveBranchId && 
+    (o.branchId === effectiveBranchId || o.branch_id === effectiveBranchId) && 
     o.status !== 'completed' && 
     o.status !== 'cancelled' &&
     o.status !== 'served'
   );
+
+  useEffect(() => {
+    if (refreshOrders) {
+      refreshOrders();
+      const interval = setInterval(refreshOrders, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [refreshOrders]);
 
   const prevCountRef = useRef(kitchenOrders.length);
   useEffect(() => {

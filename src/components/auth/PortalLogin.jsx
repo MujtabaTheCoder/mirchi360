@@ -42,9 +42,15 @@ export const PortalLogin = ({ expectedRole, blockedSession }) => {
   const [successMsg, setSuccessMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const isFormValid = expectedRole === "admin"
+    ? (username.trim().length > 0 && pin.trim().length >= 4)
+    : (/^\d{4}$/.test(pin.trim()));
+
   useEffect(() => {
     if (successMsg && currentSession && currentSession.role === expectedRole) {
-      const t = setTimeout(() => window.location.reload(), 500);
+      const t = setTimeout(() => {
+        navigate(`/${expectedRole}`, { replace: true });
+      }, 350);
       return () => clearTimeout(t);
     }
   }, [successMsg, currentSession, expectedRole, navigate]);
@@ -53,12 +59,36 @@ export const PortalLogin = ({ expectedRole, blockedSession }) => {
     e.preventDefault();
     setError("");
     setSuccessMsg("");
+
+    const trimmedPin = pin.trim();
+    const trimmedUser = username.trim();
+
+    if (expectedRole === "admin") {
+      if (!trimmedUser) {
+        setError("Please enter the Super Admin username.");
+        return;
+      }
+      if (!trimmedPin || trimmedPin.length < 4) {
+        setError("Please enter the Super Admin password (minimum 4 characters).");
+        return;
+      }
+    } else {
+      if (!trimmedPin) {
+        setError(`Please enter your 4-digit ${expectedRole === 'kitchen' ? 'Kitchen' : 'Manager'} PIN.`);
+        return;
+      }
+      if (!/^\d{4}$/.test(trimmedPin)) {
+        setError("PIN must be exactly 4 numeric digits.");
+        return;
+      }
+    }
+
     setBusy(true);
     const res = await loginStaff({
       role: expectedRole,
-      username,
-      pin,
-      password: pin,
+      username: trimmedUser,
+      pin: trimmedPin,
+      password: trimmedPin,
       branchId: selectedBranch?.id
     });
     setBusy(false);
@@ -68,6 +98,7 @@ export const PortalLogin = ({ expectedRole, blockedSession }) => {
     }
     setSuccessMsg(`Welcome, ${res.user.name}`);
   };
+
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 overflow-x-hidden space-y-4">
@@ -170,8 +201,8 @@ export const PortalLogin = ({ expectedRole, blockedSession }) => {
 
           <button
             type="submit"
-            disabled={busy}
-            className={`w-full py-3 text-xs font-bold rounded-xl shadow-lg min-h-[44px] disabled:opacity-60 ${cfg.button}`}
+            disabled={busy || !isFormValid}
+            className={`w-full py-3 text-xs font-bold rounded-xl shadow-lg min-h-[44px] transition disabled:opacity-50 disabled:cursor-not-allowed ${cfg.button}`}
           >
             {busy ? "Authenticating…" : "Sign in"}
           </button>

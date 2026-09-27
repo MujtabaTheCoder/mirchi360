@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { 
-  Flame, ShoppingBag, Bell, AlertCircle, Check, Plus, Minus, X, 
+import React, { useState, useEffect } from 'react';
+import { RefreshCw } from 'lucide-react';
+import {
+  Flame, ShoppingBag, Bell, AlertCircle, Check, Plus, Minus, X,
   Clock, Sparkles, ChefHat, MessageSquare, ChevronRight, CheckCircle, Search, Utensils, History,
   User, Phone
 } from 'lucide-react';
@@ -8,14 +9,15 @@ import { useApp, formatPakistanTime } from '../../lib/store';
 import { CustomerIdentityModal } from './CustomerIdentityModal';
 
 export const CustomerApp = () => {
-  const { 
-    selectedBranch, 
-    selectedTableNumber, 
-    menuItems, 
-    createOrder, 
-    orders, 
-    submitComplaint, 
-    callWaiter 
+  const {
+    selectedBranch,
+    selectedTableNumber,
+    menuItems,
+    createOrder,
+    clearCustomerOrders,
+    orders,
+    submitComplaint,
+    callWaiter
   } = useApp();
 
   const [activeCategory, setActiveCategory] = useState("ALL");
@@ -24,6 +26,17 @@ export const CustomerApp = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [orderNotes, setOrderNotes] = useState("");
   const [activeTab, setActiveTab] = useState("menu");
+
+  const handleEmergencyReset = () => {
+    if (window.confirm("Do you want to reset order state and clear any stale pending orders on this mobile device?")) {
+      clearCustomerOrders(selectedBranch.id, selectedTableNumber);
+      setCart([]);
+      setOrderNotes("");
+      setActiveTab("menu");
+      showToast("Order state reset. You can now place a fresh order!");
+    }
+  };
+
 
   // Modal States
   const [isComplaintModalOpen, setIsComplaintModalOpen] = useState(false);
@@ -50,14 +63,14 @@ export const CustomerApp = () => {
   // Filtered Menu Items
   const filteredItems = menuItems.filter(item => {
     const matchesCat = activeCategory === "ALL" || item.categoryName === activeCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          item.categoryName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.categoryName.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCat && matchesSearch;
   });
 
   // Filter orders for THIS table & branch
   const allTableOrders = orders.filter(o => Number(o.tableNumber) === Number(selectedTableNumber) && o.branchId === selectedBranch.id);
-  
+
   // ACTIVE ORDERS (pending, preparing, ready) vs COMPLETED/PAST ORDERS
   const activeTableOrders = allTableOrders.filter(o => o.status !== 'completed' && o.status !== 'cancelled');
   const pastTableOrders = allTableOrders.filter(o => o.status === 'completed' || o.status === 'cancelled');
@@ -117,7 +130,7 @@ export const CustomerApp = () => {
 
   const handlePlaceOrder = () => {
     if (cart.length === 0) return;
-    
+
     const trimmedName = (customerIdentity.name || "").trim();
     const trimmedPhone = (customerIdentity.phone || "").trim();
 
@@ -126,7 +139,7 @@ export const CustomerApp = () => {
       setIsIdentityModalOpen(true);
       return;
     }
-    
+
     const newOrd = createOrder({
       items: cart,
       totalAmount: cartTotal,
@@ -137,7 +150,7 @@ export const CustomerApp = () => {
 
     try {
       localStorage.setItem('mirchi_customer_identity', JSON.stringify({ name: trimmedName, phone: trimmedPhone }));
-    } catch {}
+    } catch { }
 
     setCart([]);
     setOrderNotes("");
@@ -150,7 +163,7 @@ export const CustomerApp = () => {
     setCustomerIdentity(identity);
     try {
       localStorage.setItem('mirchi_customer_identity', JSON.stringify(identity));
-    } catch {}
+    } catch { }
     setIsIdentityModalOpen(false);
     // Now proceed with order placement
     if (cart.length > 0) {
@@ -249,17 +262,15 @@ export const CustomerApp = () => {
         <div className="max-w-xl mx-auto flex mt-3 bg-slate-950 p-1 rounded-xl border border-slate-800 overflow-x-hidden">
           <button
             onClick={() => setActiveTab("menu")}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
-              activeTab === "menu" ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-            }`}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${activeTab === "menu" ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
           >
             Digital Menu
           </button>
           <button
             onClick={() => setActiveTab("tracking")}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition relative ${
-              activeTab === "tracking" ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-            }`}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition relative ${activeTab === "tracking" ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
           >
             Active Orders ({activeTableOrders.length})
             {activeTableOrders.some(o => o.status === 'ready' || o.status === 'preparing') && (
@@ -291,11 +302,10 @@ export const CustomerApp = () => {
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition border ${
-                    activeCategory === cat
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition border ${activeCategory === cat
                       ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white border-rose-500 shadow-md shadow-rose-900/40'
                       : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
-                  }`}
+                    }`}
                 >
                   {cat}
                 </button>
@@ -307,11 +317,10 @@ export const CustomerApp = () => {
               {filteredItems.map((item) => (
                 <div
                   key={item.id}
-                  className={`bg-slate-900/90 border rounded-2xl p-3 flex space-x-3 transition relative overflow-hidden ${
-                    item.isOutOfStock
+                  className={`bg-slate-900/90 border rounded-2xl p-3 flex space-x-3 transition relative overflow-hidden ${item.isOutOfStock
                       ? 'border-slate-800/80 opacity-60 grayscale'
                       : 'border-slate-800 hover:border-slate-700 shadow-lg'
-                  }`}
+                    }`}
                 >
                   {/* Item Image */}
                   <div className="w-24 h-24 rounded-xl overflow-hidden bg-slate-950 flex-shrink-0 relative">
@@ -372,22 +381,49 @@ export const CustomerApp = () => {
         ) : (
           /* Live Order Tracking View (Focusing on ACTIVE ORDERS) */
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-sm font-extrabold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
                 <ChefHat className="w-4 h-4 text-rose-500" />
                 <span>Active Orders (Table {selectedTableNumber})</span>
               </h2>
 
-              {pastTableOrders.length > 0 && (
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setShowPastHistory(prev => !prev)}
-                  className="text-xs font-bold text-slate-400 hover:text-amber-400 flex items-center space-x-1 transition bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-800"
+                  type="button"
+                  onClick={handleEmergencyReset}
+                  title="Clear stale orders & reset state"
+                  className="text-xs font-bold text-rose-400 hover:text-white bg-rose-950/60 hover:bg-rose-900/80 px-2.5 py-1.5 rounded-xl border border-rose-800/80 flex items-center space-x-1.5 transition shadow active:scale-95"
                 >
-                  <History className="w-3.5 h-3.5" />
-                  <span>{showPastHistory ? 'Hide Completed' : `View Past (${pastTableOrders.length})`}</span>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reset / New Order</span>
                 </button>
-              )}
+
+                {pastTableOrders.length > 0 && (
+                  <button
+                    onClick={() => setShowPastHistory(prev => !prev)}
+                    className="text-xs font-bold text-slate-400 hover:text-amber-400 flex items-center space-x-1 transition bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-800"
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    <span>{showPastHistory ? 'Hide' : `Past (${pastTableOrders.length})`}</span>
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Mobile Network Drop / Stale Pending Order Fallback Notice */}
+            {activeTableOrders.length > 0 && (
+              <div className="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-2.5 px-3 flex items-center justify-between text-xs text-slate-400 shadow-sm">
+                <span className="text-[11px] text-slate-400">Orders stuck in pending due to network drop?</span>
+                <button
+                  type="button"
+                  onClick={handleEmergencyReset}
+                  className="text-[11px] font-bold text-rose-400 hover:text-rose-300 underline flex items-center gap-1 shrink-0 ml-2"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Emergency Reset
+                </button>
+              </div>
+            )}
 
             {/* If no active orders currently running */}
             {activeTableOrders.length === 0 ? (
@@ -424,13 +460,12 @@ export const CustomerApp = () => {
                       </div>
 
                       {/* Status Badge */}
-                      <div className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wide flex items-center space-x-1.5 ${
-                        order.status === 'pending' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse' :
-                        order.status === 'preparing' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                        order.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-bounce' :
-                        order.status === 'served' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
-                        'bg-slate-800 text-slate-400'
-                      }`}>
+                      <div className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wide flex items-center space-x-1.5 ${order.status === 'pending' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse' :
+                          order.status === 'preparing' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                            order.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-bounce' :
+                              order.status === 'served' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                                'bg-slate-800 text-slate-400'
+                        }`}>
                         {order.status === 'pending' && <Clock className="w-3.5 h-3.5" />}
                         {order.status === 'preparing' && <ChefHat className="w-3.5 h-3.5 text-blue-400" />}
                         {order.status === 'ready' && <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
@@ -653,11 +688,10 @@ export const CustomerApp = () => {
                 <button
                   key={v.name}
                   onClick={() => setSelectedVariant(v)}
-                  className={`w-full p-3 rounded-2xl border text-xs font-bold flex justify-between items-center transition ${
-                    selectedVariant?.name === v.name
+                  className={`w-full p-3 rounded-2xl border text-xs font-bold flex justify-between items-center transition ${selectedVariant?.name === v.name
                       ? 'bg-rose-950/80 border-rose-500 text-white shadow'
                       : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                  }`}
+                    }`}
                 >
                   <span>{v.name}</span>
                   <span className="text-amber-400 font-extrabold">PKR {v.price}</span>

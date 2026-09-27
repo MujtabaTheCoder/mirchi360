@@ -33,8 +33,17 @@ export const AdminApp = () => {
     resolveComplaint,
     logoutStaff,
     currentShift,
-    previousShift
+    previousShift,
+    refreshOrders
   } = useApp();
+
+  useEffect(() => {
+    if (refreshOrders) {
+      refreshOrders();
+      const interval = setInterval(refreshOrders, 6000);
+      return () => clearInterval(interval);
+    }
+  }, [refreshOrders]);
 
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -461,8 +470,8 @@ export const AdminApp = () => {
                 key={p.id}
                 onClick={() => setPeriodType(p.id)}
                 className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${periodType === p.id
-                    ? 'bg-rose-600 text-white border-rose-500 shadow'
-                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                  ? 'bg-rose-600 text-white border-rose-500 shadow'
+                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
                   }`}
               >
                 {p.label}
@@ -497,8 +506,8 @@ export const AdminApp = () => {
               key="ALL"
               onClick={() => setFilterBranch("ALL")}
               className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${filterBranch === "ALL"
-                  ? 'bg-rose-600 text-white border-rose-500 shadow'
-                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                ? 'bg-rose-600 text-white border-rose-500 shadow'
+                : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
                 }`}
             >
               All Branches
@@ -508,8 +517,8 @@ export const AdminApp = () => {
                 key={b.id}
                 onClick={() => setFilterBranch(b.id)}
                 className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${filterBranch === b.id
-                    ? 'bg-rose-600 text-white border-rose-500 shadow'
-                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                  ? 'bg-rose-600 text-white border-rose-500 shadow'
+                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
                   }`}
               >
                 {b.name}
@@ -524,8 +533,8 @@ export const AdminApp = () => {
                 key={s}
                 onClick={() => setFilterShift(s)}
                 className={`px-3 py-1 text-xs font-bold rounded-xl transition border shrink-0 ${filterShift === s
-                    ? 'bg-rose-600 text-white border-rose-500 shadow'
-                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                  ? 'bg-rose-600 text-white border-rose-500 shadow'
+                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
                   }`}
               >
                 {s === 'ALL' ? 'All Shifts' : `${s} Shift`}
@@ -555,8 +564,8 @@ export const AdminApp = () => {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition flex items-center space-x-2 ${activeTab === tab.id
-                  ? 'bg-rose-600 text-white shadow-lg shadow-rose-900/50'
-                  : 'text-slate-400 hover:text-white'
+                ? 'bg-rose-600 text-white shadow-lg shadow-rose-900/50'
+                : 'text-slate-400 hover:text-white'
                 }`}
             >
               <Icon className="w-4 h-4" />
@@ -688,10 +697,10 @@ export const AdminApp = () => {
                         <td className="p-3 font-extrabold text-white">PKR {order.totalAmount}</td>
                         <td className="p-3">
                           <span className={`px-2 py-0.5 rounded-full uppercase text-[10px] font-extrabold ${order.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
-                              order.status === 'preparing' ? 'bg-blue-500/20 text-blue-400' :
-                                order.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400' :
-                                  order.status === 'served' ? 'bg-purple-500/20 text-purple-400' :
-                                    order.status === 'completed' ? 'bg-slate-800 text-slate-400' : 'bg-rose-500/20 text-rose-400'
+                            order.status === 'preparing' ? 'bg-blue-500/20 text-blue-400' :
+                              order.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400' :
+                                order.status === 'served' ? 'bg-purple-500/20 text-purple-400' :
+                                  order.status === 'completed' ? 'bg-slate-800 text-slate-400' : 'bg-rose-500/20 text-rose-400'
                             }`}>
                             {order.status}
                           </span>
@@ -954,8 +963,8 @@ export const AdminApp = () => {
                   key={st}
                   onClick={() => setComplaintFilterStatus(st)}
                   className={`px-3 py-1 text-xs font-bold rounded-xl transition border capitalize ${complaintFilterStatus === st
-                      ? 'bg-rose-600 text-white border-rose-500'
-                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                    ? 'bg-rose-600 text-white border-rose-500'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
                     }`}
                 >
                   {st}
@@ -1012,8 +1021,8 @@ export const AdminApp = () => {
 
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${c.status === 'resolved'
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                          : 'bg-rose-950 text-rose-400 border border-rose-800'
+                        ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                        : 'bg-rose-950 text-rose-400 border border-rose-800'
                         }`}>
                         {c.status}
                       </span>
@@ -1113,8 +1122,8 @@ export const AdminApp = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase ${rep.reportType === 'ShiftClosing'
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                          : 'bg-amber-950 text-amber-400 border border-amber-800'
+                        ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                        : 'bg-amber-950 text-amber-400 border border-amber-800'
                         }`}>
                         {rep.reportType === 'ShiftClosing' ? 'Shift Closing Handover' : 'Incident Log'}
                       </span>
