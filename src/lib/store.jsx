@@ -1354,11 +1354,13 @@ export const AppProvider = ({ children }) => {
 
     if (isSupabaseConfigured) {
       try {
-        await supabase.from('orders').update({
+        const { error } = await supabase.from('orders').update({
           status: 'completed',
-          payment: 'Paid',
           updated_at: new Date().toISOString()
         }).eq('id', orderId);
+        if (error) {
+          console.error("Failed to mark order paid in Supabase:", error);
+        }
       } catch (err) {
         console.error("Failed to mark order paid in Supabase:", err);
       }

@@ -359,6 +359,22 @@ export const ManagerApp = () => {
                       </>
                     )}
 
+                    {order.status === 'completed' && (
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Order Paid & Closed</span>
+                        </div>
+                        <button
+                          onClick={() => setPrintingOrder(order)}
+                          className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 flex items-center gap-1.5 text-xs font-bold transition"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          Reprint Bill
+                        </button>
+                      </div>
+                    )}
+
                     {order.status !== 'completed' && order.status !== 'cancelled' && order.status !== 'ready' && order.status !== 'served' && (
                       <button
                         onClick={() => setPrintingOrder(order)}
