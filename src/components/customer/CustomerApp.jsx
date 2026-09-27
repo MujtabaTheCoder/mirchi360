@@ -16,7 +16,6 @@ export const CustomerApp = () => {
     selectedTableNumber,
     menuItems,
     createOrder,
-    clearCustomerOrders,
     orders,
     submitComplaint,
     callWaiter
@@ -28,20 +27,6 @@ export const CustomerApp = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [orderNotes, setOrderNotes] = useState("");
   const [activeTab, setActiveTab] = useState("menu");
-
-  const handleEmergencyReset = () => {
-    if (window.confirm("Do you want to reset order state and clear any stale pending orders or local cache on this device?")) {
-      clearCustomerOrders(selectedBranch.id, selectedTableNumber);
-      try {
-        localStorage.removeItem('mirchi_customer_identity');
-        localStorage.removeItem('mirchi_pending_sync_queue');
-      } catch {}
-      setCart([]);
-      setOrderNotes("");
-      setActiveTab("menu");
-      showToast("Order state & storage reset. You can now place a fresh order!");
-    }
-  };
 
 
   // Modal States
@@ -412,43 +397,17 @@ export const CustomerApp = () => {
                 <span>Active Orders (Table {selectedTableNumber})</span>
               </h2>
 
-              <div className="flex items-center gap-2">
+              {pastTableOrders.length > 0 && (
                 <button
                   type="button"
-                  onClick={handleEmergencyReset}
-                  title="Clear stale orders & reset state"
-                  className="text-xs font-bold text-rose-400 hover:text-white bg-rose-950/60 hover:bg-rose-900/80 px-2.5 py-1.5 rounded-xl border border-rose-800/80 flex items-center space-x-1.5 transition shadow active:scale-95"
+                  onClick={() => setShowPastHistory(prev => !prev)}
+                  className="text-xs font-bold text-slate-400 hover:text-amber-400 flex items-center space-x-1 transition bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-800"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Reset / New Order</span>
+                  <History className="w-3.5 h-3.5" />
+                  <span>{showPastHistory ? 'Hide Past' : `View Past (${pastTableOrders.length})`}</span>
                 </button>
-
-                {pastTableOrders.length > 0 && (
-                  <button
-                    onClick={() => setShowPastHistory(prev => !prev)}
-                    className="text-xs font-bold text-slate-400 hover:text-amber-400 flex items-center space-x-1 transition bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-800"
-                  >
-                    <History className="w-3.5 h-3.5" />
-                    <span>{showPastHistory ? 'Hide' : `Past (${pastTableOrders.length})`}</span>
-                  </button>
-                )}
-              </div>
+              )}
             </div>
-
-            {/* Mobile Network Drop / Stale Pending Order Fallback Notice */}
-            {activeTableOrders.length > 0 && (
-              <div className="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-2.5 px-3 flex items-center justify-between text-xs text-slate-400 shadow-sm">
-                <span className="text-[11px] text-slate-400">Orders stuck in pending due to network drop?</span>
-                <button
-                  type="button"
-                  onClick={handleEmergencyReset}
-                  className="text-[11px] font-bold text-rose-400 hover:text-rose-300 underline flex items-center gap-1 shrink-0 ml-2"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  Emergency Reset
-                </button>
-              </div>
-            )}
 
             {/* If no active orders currently running */}
             {activeTableOrders.length === 0 ? (

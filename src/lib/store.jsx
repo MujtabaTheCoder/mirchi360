@@ -364,7 +364,7 @@ export const AppProvider = ({ children }) => {
     try {
       const savedOrders = localStorage.getItem('mirchi_orders');
       if (savedOrders) {
-        const parsed = JSON.parse(savedOrders).filter(o => o && !String(o.id).includes('seed'));
+        const parsed = JSON.parse(savedOrders).filter(o => o && !String(o.id).includes('seed') && o.notes !== '[PURGED_DEMO]');
         if (parsed.length > 0) {
           const maxNum = Math.max(...parsed.map(o => Number(o.orderNumber) || 0));
           return maxNum > 0 ? maxNum : 0;
@@ -386,8 +386,8 @@ export const AppProvider = ({ children }) => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // Strictly purge all demo/seed orders
-          const realOrders = parsed.filter(o => o && !String(o.id).includes('seed'));
+          // Strictly purge all demo/seed orders and purged orders
+          const realOrders = parsed.filter(o => o && !String(o.id).includes('seed') && o.notes !== '[PURGED_DEMO]');
           try { localStorage.setItem('mirchi_orders', JSON.stringify(realOrders)); } catch {}
           return realOrders.map(normalizeOrder);
         }
@@ -589,25 +589,17 @@ export const AppProvider = ({ children }) => {
         console.warn("Error querying orders with items:", ordersErr);
       }
 
-      if (ordersData && ordersData.length > 0) {
+      if (ordersData) {
         const realOrders = ordersData
-          .filter(o => o && !String(o.id).includes('seed') && !String(o.id).startsWith('seed-'))
+          .filter(o => o && !String(o.id).includes('seed') && !String(o.id).startsWith('seed-') && o.notes !== '[PURGED_DEMO]')
           .map(normalizeOrder);
 
-        setOrders(prev => {
-          const merged = mergeById(prev, realOrders, normalizeOrder);
-          try { localStorage.setItem('mirchi_orders', JSON.stringify(merged)); } catch {}
-          return merged;
-        });
+        setOrders(realOrders);
+        try { localStorage.setItem('mirchi_orders', JSON.stringify(realOrders)); } catch {}
 
         const maxNum = Math.max(0, ...realOrders.map(o => Number(o.orderNumber || o.order_number) || 0));
-        if (maxNum > 0) {
-          setOrderCounter(prev => {
-            const higher = Math.max(prev, maxNum);
-            try { localStorage.setItem('mirchi_order_counter', String(higher)); } catch {}
-            return higher;
-          });
-        }
+        setOrderCounter(maxNum);
+        try { localStorage.setItem('mirchi_order_counter', String(maxNum)); } catch {}
       }
       if (complaintsData && complaintsData.length > 0) {
         const realComplaints = complaintsData.filter(c => c && !String(c.id).includes('seed') && !String(c.id).startsWith('seed-'));
