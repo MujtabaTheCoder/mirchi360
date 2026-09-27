@@ -50,22 +50,29 @@ export const CustomerApp = () => {
   const [selectedVariant, setSelectedVariant] = useState(null);
 
   // Filter categories
-  const categories = ["ALL", ...new Set(menuItems.map(item => item.categoryName))];
+  const categories = ["ALL", ...new Set((menuItems || []).map(item => item?.categoryName).filter(Boolean))];
 
   // Filtered Menu Items
-  const filteredItems = menuItems.filter(item => {
-    const matchesCat = activeCategory === "ALL" || item.categoryName === activeCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.categoryName.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredItems = (menuItems || []).filter(item => {
+    if (!item) return false;
+    const itemName = item.name || '';
+    const itemCat = item.categoryName || '';
+    const query = (searchQuery || '').toLowerCase();
+    const matchesCat = activeCategory === "ALL" || itemCat === activeCategory;
+    const matchesSearch = itemName.toLowerCase().includes(query) || itemCat.toLowerCase().includes(query);
     return matchesCat && matchesSearch;
   });
 
-  // Filter orders for THIS table & branch
-  const allTableOrders = orders.filter(o => Number(o.tableNumber) === Number(selectedTableNumber) && o.branchId === selectedBranch.id);
+  // Filter orders for THIS table & branch (with complete null-safety)
+  const allTableOrders = (orders || []).filter(o => 
+    o && 
+    Number(o.tableNumber || o.table_number) === Number(selectedTableNumber) && 
+    (o.branchId === selectedBranch?.id || o.branch_id === selectedBranch?.id)
+  );
 
   // ACTIVE ORDERS (pending, preparing, ready) vs COMPLETED/PAST ORDERS
-  const activeTableOrders = allTableOrders.filter(o => o.status !== 'completed' && o.status !== 'cancelled');
-  const pastTableOrders = allTableOrders.filter(o => o.status === 'completed' || o.status === 'cancelled');
+  const activeTableOrders = allTableOrders.filter(o => o && o.status !== 'completed' && o.status !== 'cancelled');
+  const pastTableOrders = allTableOrders.filter(o => o && (o.status === 'completed' || o.status === 'cancelled'));
 
   // Add Item to Cart
   const handleAddToCart = (item, variant = null) => {
@@ -224,7 +231,7 @@ export const CustomerApp = () => {
               <h1 className="text-base font-extrabold text-white tracking-wide">MIRCHI 360</h1>
               <div className="flex items-center space-x-2 text-xs text-rose-400 font-semibold">
                 <span className="bg-rose-950/80 border border-rose-800/60 px-2 py-0.5 rounded-full">
-                  {selectedBranch.name} Branch
+                  {selectedBranch?.name || 'Defence'} Branch
                 </span>
                 <span className="bg-amber-950/80 text-amber-400 border border-amber-800/60 px-2 py-0.5 rounded-full font-bold">
                   TABLE {selectedTableNumber}
@@ -235,14 +242,6 @@ export const CustomerApp = () => {
 
           {/* Call Waiter & Complaint Quick Actions */}
           <div className="flex items-center space-x-1.5 sm:space-x-2">
-            <button
-              onClick={handleEmergencyReset}
-              title="Persistent Reset & Clear Storage"
-              className="p-2 bg-slate-800/60 hover:bg-rose-950/80 text-slate-400 hover:text-rose-400 border border-slate-700/80 hover:border-rose-800 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden sm:inline font-bold">Reset</span>
-            </button>
             <a
               href="/staff"
               className="p-2 bg-slate-800/50 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
