@@ -7,44 +7,74 @@ import { ManagerApp } from './components/manager/ManagerApp';
 import { AdminApp } from './components/admin/AdminApp';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { StaffPortal } from './components/auth/StaffPortal';
+import { ErrorBoundary } from './components/shared/ErrorBoundary';
 
 export default function App() {
   return (
-    <AppProvider>
-      <BrowserRouter>
-        <div className="min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden font-sans">
-          <Routes>
-            <Route path="/" element={<CustomerApp />} />
-            <Route path="/menu" element={<CustomerApp />} />
-            <Route path="/staff" element={<StaffPortal />} />
-            <Route
-              path="/kitchen"
-              element={
-                <ProtectedRoute role="kitchen">
-                  <KitchenApp />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/manager"
-              element={
-                <ProtectedRoute role="manager">
-                  <ManagerApp />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute role="admin">
-                  <AdminApp />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-      </BrowserRouter>
-    </AppProvider>
+    <ErrorBoundary sectionName="Application Root">
+      <AppProvider>
+        <BrowserRouter>
+          <div className="min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden font-sans">
+            <Routes>
+              <Route 
+                path="/" 
+                element={
+                  <ErrorBoundary sectionName="Customer Portal">
+                    <CustomerApp />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route 
+                path="/menu" 
+                element={
+                  <ErrorBoundary sectionName="Digital Menu">
+                    <CustomerApp />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route 
+                path="/staff" 
+                element={
+                  <ErrorBoundary sectionName="Staff Portal">
+                    <StaffPortal />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route
+                path="/kitchen"
+                element={
+                  <ProtectedRoute role="kitchen">
+                    <ErrorBoundary sectionName="Kitchen Display System">
+                      <KitchenApp />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/manager"
+                element={
+                  <ProtectedRoute role="manager">
+                    <ErrorBoundary sectionName="Manager Control Panel">
+                      <ManagerApp />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute role="admin">
+                    <ErrorBoundary sectionName="Admin Super Portal">
+                      <AdminApp />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
+        </BrowserRouter>
+      </AppProvider>
+    </ErrorBoundary>
   );
 }

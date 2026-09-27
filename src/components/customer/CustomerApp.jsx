@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { useApp, formatPakistanTime } from '../../lib/store';
 import { CustomerIdentityModal } from './CustomerIdentityModal';
+import { ErrorBoundary } from '../shared/ErrorBoundary';
+import { sanitizeTextInput } from '../../lib/security';
 
 export const CustomerApp = () => {
   const {
@@ -28,12 +30,16 @@ export const CustomerApp = () => {
   const [activeTab, setActiveTab] = useState("menu");
 
   const handleEmergencyReset = () => {
-    if (window.confirm("Do you want to reset order state and clear any stale pending orders on this mobile device?")) {
+    if (window.confirm("Do you want to reset order state and clear any stale pending orders or local cache on this device?")) {
       clearCustomerOrders(selectedBranch.id, selectedTableNumber);
+      try {
+        localStorage.removeItem('mirchi_customer_identity');
+        localStorage.removeItem('mirchi_pending_sync_queue');
+      } catch {}
       setCart([]);
       setOrderNotes("");
       setActiveTab("menu");
-      showToast("Order state reset. You can now place a fresh order!");
+      showToast("Order state & storage reset. You can now place a fresh order!");
     }
   };
 
@@ -131,8 +137,8 @@ export const CustomerApp = () => {
   const handlePlaceOrder = () => {
     if (cart.length === 0) return;
 
-    const trimmedName = (customerIdentity.name || "").trim();
-    const trimmedPhone = (customerIdentity.phone || "").trim();
+    const trimmedName = sanitizeTextInput(customerIdentity.name || "", 80);
+    const trimmedPhone = sanitizeTextInput(customerIdentity.phone || "", 30);
 
     // Check if customer identity is set
     if (!trimmedName || !trimmedPhone) {
@@ -140,10 +146,12 @@ export const CustomerApp = () => {
       return;
     }
 
+    const cleanNotes = sanitizeTextInput(orderNotes, 300);
+
     const newOrd = createOrder({
       items: cart,
       totalAmount: cartTotal,
-      notes: orderNotes,
+      notes: cleanNotes,
       customerName: trimmedName,
       customerPhone: trimmedPhone
     });
@@ -160,26 +168,30 @@ export const CustomerApp = () => {
   };
 
   const handleIdentitySave = (identity) => {
-    setCustomerIdentity(identity);
+    const cleanName = sanitizeTextInput(identity.name || "", 80);
+    const cleanPhone = sanitizeTextInput(identity.phone || "", 30);
+    const cleanIdentity = { name: cleanName, phone: cleanPhone };
+    setCustomerIdentity(cleanIdentity);
     try {
-      localStorage.setItem('mirchi_customer_identity', JSON.stringify(identity));
+      localStorage.setItem('mirchi_customer_identity', JSON.stringify(cleanIdentity));
     } catch { }
     setIsIdentityModalOpen(false);
     // Now proceed with order placement
     if (cart.length > 0) {
+      const cleanNotes = sanitizeTextInput(orderNotes, 300);
       const newOrd = createOrder({
         items: cart,
         totalAmount: cartTotal,
-        notes: orderNotes,
-        customerName: identity.name,
-        customerPhone: identity.phone
+        notes: cleanNotes,
+        customerName: cleanName,
+        customerPhone: cleanPhone
       });
 
       setCart([]);
       setOrderNotes("");
       setIsCartOpen(false);
       setActiveTab("tracking");
-      showToast(`Order #${newOrd.orderNumber} placed! Name: ${identity.name}`);
+      showToast(`Order #${newOrd.orderNumber} placed! Name: ${cleanName}`);
     }
   };
 
@@ -190,8 +202,9 @@ export const CustomerApp = () => {
 
   const handleComplaintSubmit = (e) => {
     e.preventDefault();
-    if (!complaintText.trim()) return;
-    submitComplaint(complaintText);
+    const cleanComplaint = sanitizeTextInput(complaintText, 500);
+    if (!cleanComplaint) return;
+    submitComplaint(cleanComplaint);
     setComplaintText("");
     setIsComplaintModalOpen(false);
     showToast("Complaint sent directly to Branch Manager.");
@@ -233,7 +246,15 @@ export const CustomerApp = () => {
           </div>
 
           {/* Call Waiter & Complaint Quick Actions */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5 sm:space-x-2">
+            <button
+              onClick={handleEmergencyReset}
+              title="Persistent Reset & Clear Storage"
+              className="p-2 bg-slate-800/60 hover:bg-rose-950/80 text-slate-400 hover:text-rose-400 border border-slate-700/80 hover:border-rose-800 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span className="hidden sm:inline font-bold">Reset</span>
+            </button>
             <a
               href="/staff"
               className="p-2 bg-slate-800/50 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
@@ -282,6 +303,7 @@ export const CustomerApp = () => {
 
       {/* Main Content Area */}
       <main className="max-w-xl mx-auto px-4 pt-4">
+        <ErrorBoundary sectionName="Customer View">
         {activeTab === "menu" ? (
           <>
             {/* Search Bar */}
@@ -542,6 +564,7 @@ export const CustomerApp = () => {
             )}
           </div>
         )}
+        </ErrorBoundary>
       </main>
 
       {/* Floating Cart Button */}

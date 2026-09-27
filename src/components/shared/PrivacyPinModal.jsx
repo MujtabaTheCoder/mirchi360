@@ -1,26 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { Lock, X, AlertTriangle, ShieldCheck } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { useApp } from '../../lib/store';
+import React, { useState } from 'react';
+import { Lock, X, AlertTriangle } from 'lucide-react';
+import { validatePin } from '../../lib/security';
 
 export const PrivacyPinModal = ({ isOpen, onClose, onConfirm, title = "Security Privacy PIN Required", description = "Enter the 2nd-factor Privacy PIN to modify or cancel this committed order." }) => {
-  const { currentSession } = useApp();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
-  // If user is Admin, bypass privacy PIN
-  const isAdmin = currentSession?.role === 'admin';
-
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!pin || pin.length < 4) {
-      setError('Please enter the required 4-digit Security Privacy PIN.');
+    const pinCheck = validatePin(pin, true);
+    if (!pinCheck.valid) {
+      setError(pinCheck.error || 'Please enter the required 4-digit Security Privacy PIN.');
       return;
     }
 
-    onConfirm(pin);
+    onConfirm(pinCheck.sanitized);
     setPin('');
     setError('');
   };

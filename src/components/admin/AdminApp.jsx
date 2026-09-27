@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Crown, FileText, Users, Utensils, QrCode, FileSearch,
   TrendingUp, Plus, Edit2, Lock, X, BarChart3, Calendar,
@@ -12,6 +12,8 @@ import { ShiftDisplay } from '../shared/ShiftDisplay';
 import { ShiftChangeNotification } from '../shared/ShiftChangeNotification';
 import { SEED_DATA } from '../../lib/initialData';
 import { PortalLogin } from '../auth/PortalLogin';
+import { ErrorBoundary } from '../shared/ErrorBoundary';
+import { sanitizeTextInput, validatePin } from '../../lib/security';
 
 export const AdminApp = () => {
   const {
@@ -330,13 +332,21 @@ export const AdminApp = () => {
 
   const handleCreateStaffSubmit = (e) => {
     e.preventDefault();
-    if (!newStaffName || !newStaffUser || !newStaffPin) return;
+    const cleanName = sanitizeTextInput(newStaffName, 60);
+    const cleanUser = sanitizeTextInput(newStaffUser, 30).toLowerCase();
+    const isDigitsOnly = newStaffRole !== 'admin';
+    const pinCheck = validatePin(newStaffPin, isDigitsOnly);
+
+    if (!cleanName || !cleanUser || !pinCheck.valid) {
+      alert(pinCheck.error || "Please enter valid staff details and PIN.");
+      return;
+    }
 
     const newAcc = {
       id: `st-${Date.now()}`,
-      name: newStaffName,
-      username: newStaffUser,
-      pin: newStaffPin,
+      name: cleanName,
+      username: cleanUser,
+      pin: pinCheck.sanitized,
       role: newStaffRole,
       privacyPin: "9999",
       branchId: selectedBranch.id
@@ -349,12 +359,18 @@ export const AdminApp = () => {
     setNewStaffUser("");
     setNewStaffPin("");
     setIsStaffModalOpen(false);
-    alert(`Staff account "${newStaffName}" created! Username: ${newStaffUser}`);
+    alert(`Staff account "${cleanName}" created! Username: ${cleanUser}`);
   };
 
   const handleAdminDirectCancelOrder = (orderId) => {
-    if (window.confirm(`Admin Override: Cancel order #${orderId} directly without Privacy PIN?`)) {
-      modifyOrderWithPrivacyPin(orderId, 'CANCEL', { reason: "Cancelled directly by Super Admin override" }, '');
+    const enteredPin = window.prompt("Enter Super Admin Privacy PIN (9999) to authorize order cancellation:");
+    if (!enteredPin || enteredPin.trim().length < 4) {
+      alert("Cancellation aborted: Valid 4-digit Security Privacy PIN is required.");
+      return;
+    }
+    const res = modifyOrderWithPrivacyPin(orderId, 'CANCEL', { reason: "Cancelled by Super Admin Privacy PIN authorization" }, enteredPin.trim());
+    if (!res.success) {
+      alert(res.message);
     }
   };
 
@@ -575,6 +591,7 @@ export const AdminApp = () => {
         })}
       </div>
 
+      <ErrorBoundary sectionName="Admin Dashboard View">
       {/* TAB 1: OVERVIEW & MASTER ORDERS MATRIX */}
       {activeTab === "overview" && (
         <div className="space-y-5">
@@ -1447,6 +1464,7 @@ export const AdminApp = () => {
           </div>
         </div>
       )}
+      </ErrorBoundary>
 
       {/* Item Modal */}
       {isItemModalOpen && (

@@ -60,7 +60,15 @@ export const TABLE_UUID_MAP = {
   }
 };
 
+export const isValidUuid = (id) => {
+  if (typeof id !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+};
+
 export const getBranchUuid = (branchIdOrSlug) => {
+  if (branchIdOrSlug && isValidUuid(branchIdOrSlug)) {
+    return branchIdOrSlug;
+  }
   return BRANCH_UUID_MAP[branchIdOrSlug] || BRANCH_UUID_MAP['branch-def'];
 };
 
@@ -70,7 +78,36 @@ export const getTableUuid = (branchIdOrSlug, tableNumber) => {
   return TABLE_UUID_MAP[branchUuid]?.[num] || TABLE_UUID_MAP[branchUuid]?.[4] || '2b3a57d1-27d8-450f-b991-8b1bdb217578';
 };
 
-const customStorage = typeof window !== 'undefined' && window.localStorage ? window.localStorage : undefined;
+// Safe storage wrapper that gracefully falls back to memory if private browsing disables localStorage
+const memoryStorage = new Map();
+const safeStorage = {
+  getItem: (key) => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem(key);
+      }
+    } catch {}
+    return memoryStorage.get(key) || null;
+  },
+  setItem: (key, value) => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, value);
+        return;
+      }
+    } catch {}
+    memoryStorage.set(key, String(value));
+  },
+  removeItem: (key) => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key);
+        return;
+      }
+    } catch {}
+    memoryStorage.delete(key);
+  }
+};
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -78,7 +115,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: 'mirchi360_auth_token',
-    storage: customStorage,
+    storage: safeStorage,
   },
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
+  }
 });
-

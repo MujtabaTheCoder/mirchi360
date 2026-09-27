@@ -10,6 +10,8 @@ import { StaffShell } from '../layout/StaffShell';
 import { ShiftDisplay } from '../shared/ShiftDisplay';
 import { ShiftChangeNotification } from '../shared/ShiftChangeNotification';
 import { playAlertSound } from '../../lib/soundAlerts';
+import { ErrorBoundary } from '../shared/ErrorBoundary';
+import { sanitizeTextInput } from '../../lib/security';
 
 export const ManagerApp = () => {
   const { 
@@ -110,12 +112,13 @@ export const ManagerApp = () => {
 
   const handleCreateReportSubmit = (e) => {
     e.preventDefault();
-    if (!reportContent.trim()) return;
+    const cleanContent = sanitizeTextInput(reportContent, 2000);
+    if (!cleanContent) return;
     addBranchReport({ 
       shiftName, 
       shiftType: currentShiftInfo.shiftType,
       reportType: "Incident",
-      content: reportContent 
+      content: cleanContent 
     });
     setReportContent("");
     setIsReportModalOpen(false);
@@ -124,6 +127,7 @@ export const ManagerApp = () => {
 
   const handleShiftClosingSubmit = (e) => {
     e.preventDefault();
+    const cleanNotes = sanitizeTextInput(reportContent, 1000);
     addBranchReport({
       shiftName: currentShiftInfo.shiftName,
       shiftType: currentShiftInfo.shiftType,
@@ -131,7 +135,7 @@ export const ManagerApp = () => {
       totalShiftSales: totalSalesRevenue,
       totalOrdersCount: completedOrders.length,
       cancelledOrdersCount: cancelledCount,
-      content: `SHIFT CLOSING SUMMARY: Total Sales PKR ${totalSalesRevenue} across ${completedOrders.length} completed orders. ${cancelledCount} cancelled orders. Notes: ${reportContent || 'Routine handover completed clean.'}`
+      content: `SHIFT CLOSING SUMMARY: Total Sales PKR ${totalSalesRevenue} across ${completedOrders.length} completed orders. ${cancelledCount} cancelled orders. Notes: ${cleanNotes || 'Routine handover completed clean.'}`
     });
     setReportContent("");
     setIsShiftClosingModalOpen(false);
@@ -191,6 +195,7 @@ export const ManagerApp = () => {
         </div>
       </div>
 
+      <ErrorBoundary sectionName="Manager Supervisory Content">
       {/* Real-time Incident Alerts Banner */}
       {(activeComplaints.length > 0 || activeWaiterCalls.length > 0 || activeHelpCalls.length > 0) && (
         <div className="bg-gradient-to-r from-rose-950 via-slate-900 to-amber-950 border border-rose-800/80 rounded-2xl p-4 space-y-3 shadow-2xl animate-in fade-in duration-300">
@@ -480,6 +485,7 @@ export const ManagerApp = () => {
           </div>
         </div>
       )}
+      </ErrorBoundary>
 
       {/* Final Customer Sales Bill Print Modal */}
       <PrintBillModal order={printingOrder} isOpen={Boolean(printingOrder)} onClose={() => setPrintingOrder(null)} />

@@ -10,6 +10,7 @@ import { StaffShell } from '../layout/StaffShell';
 import { ShiftDisplay } from '../shared/ShiftDisplay';
 import { ShiftChangeNotification } from '../shared/ShiftChangeNotification';
 import { playOrderSound } from '../../lib/soundAlerts';
+import { ErrorBoundary } from '../shared/ErrorBoundary';
 
 export const KitchenApp = () => {
   const { 
@@ -115,6 +116,7 @@ export const KitchenApp = () => {
     >
 
       {/* Quick Out-Of-Stock Item Toggle Toolbar */}
+      <ErrorBoundary sectionName="Item Stock Controls">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5">
         <div className="text-xs font-extrabold text-slate-300 mb-2.5 flex items-center space-x-2">
           <Slash className="w-4 h-4 text-rose-500" />
@@ -136,8 +138,10 @@ export const KitchenApp = () => {
           ))}
         </div>
       </div>
+      </ErrorBoundary>
 
       {/* Incoming Orders Tickets Grid */}
+      <ErrorBoundary sectionName="Kitchen Orders Queue">
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-black text-slate-300 uppercase tracking-wider flex items-center space-x-2">
@@ -295,6 +299,7 @@ export const KitchenApp = () => {
           </div>
         )}
       </div>
+      </ErrorBoundary>
 
       {/* KOT Printing Modal (No Prices) */}
       <PrintKotModal

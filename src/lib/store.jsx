@@ -10,6 +10,13 @@ import {
   BRANCH_UUID_MAP 
 } from './supabase';
 import { authenticateStaff } from './staffCredentials';
+import { 
+  sanitizeTextInput, 
+  validatePin, 
+  sanitizeTableParam, 
+  sanitizeBranchParam, 
+  isValidSessionObject 
+} from './security';
 
 
 // Automatically purge all demo / seed items from localStorage on startup
@@ -312,16 +319,21 @@ const mergeById = (currentList = [], incomingList = [], normalizer = null) => {
 
 export const AppProvider = ({ children }) => {
   const [selectedBranch, setSelectedBranch] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    const b = params.get('branch');
-    if (b && b.toLowerCase().includes('qas')) return SEED_DATA.branches[1];
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const b = sanitizeBranchParam(params.get('branch'));
+      if (b && b.includes('qas')) return SEED_DATA.branches[1];
+    } catch {}
     return SEED_DATA.branches[0];
   });
 
   const [selectedTableNumber, setSelectedTableNumber] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    const t = params.get('table');
-    return t ? parseInt(t, 10) : 4;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return sanitizeTableParam(params.get('table'));
+    } catch {
+      return 4;
+    }
   });
 
   // Synchronously rehydrate currentSession so refreshing Admin/Manager/Kitchen portals NEVER logs the user out
@@ -331,7 +343,7 @@ export const AppProvider = ({ children }) => {
       const lsSession = localStorage.getItem(LS_SESSION_KEY);
       if (lsSession) {
         const parsed = JSON.parse(lsSession);
-        if (parsed && (parsed.id || parsed.username) && parsed.role) {
+        if (isValidSessionObject(parsed)) {
           return parsed;
         }
       }
@@ -545,8 +557,16 @@ export const AppProvider = ({ children }) => {
       try {
         const raw = localStorage.getItem('mirchi_pending_sync_queue');
         const queue = raw ? JSON.parse(raw) : [];
-        queue.push(order);
-        localStorage.setItem('mirchi_pending_sync_queue', JSON.stringify(queue));
+        // Prevent duplicate queuing of same order ID
+        if (!queue.some(item => item.id === order.id)) {
+          queue.push({
+            ...order,
+            retries: 0,
+            queuedAt: Date.now(),
+            nextRetryAt: Date.now()
+          });
+          localStorage.setItem('mirchi_pending_sync_queue', JSON.stringify(queue));
+        }
       } catch {}
     };
 
@@ -558,12 +578,25 @@ export const AppProvider = ({ children }) => {
         const queue = JSON.parse(raw);
         if (!Array.isArray(queue) || queue.length === 0) return;
 
+        const now = Date.now();
         const remaining = [];
+        let anySynced = false;
+
         for (const ord of queue) {
+          // Check exponential backoff timestamp
+          if (ord.nextRetryAt && ord.nextRetryAt > now) {
+            remaining.push(ord);
+            continue;
+          }
+
           try {
             const branchUuid = getBranchUuid(ord.branchId || ord.branch_id);
             const tableUuid = getTableUuid(ord.branchId || ord.branch_id, ord.tableNumber || ord.table_number);
-            const { data: dbOrder, error } = await supabase.from('orders').insert({
+            
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error("SYNC_TIMEOUT_8S")), 8000)
+            );
+            const insertPromise = supabase.from('orders').insert({
               restaurant_id: RESTAURANT_ID,
               branch_id: branchUuid,
               table_id: tableUuid,
@@ -573,28 +606,35 @@ export const AppProvider = ({ children }) => {
               notes: ord.notes || ''
             }).select();
 
+            const { data: dbOrder, error } = await Promise.race([insertPromise, timeoutPromise]);
+
             if (!error && dbOrder && dbOrder[0]) {
+              anySynced = true;
               if (Array.isArray(ord.items) && ord.items.length > 0) {
                 const dbItems = ord.items.map(i => ({
                   order_id: dbOrder[0].id,
-                  item_name: i.name || 'Item',
-                  variant_name: i.variantName || null,
+                  item_name: sanitizeTextInput(i.name || 'Item', 120),
+                  variant_name: i.variantName ? sanitizeTextInput(i.variantName, 60) : null,
                   unit_price: Number(i.unitPrice || 0),
                   quantity: Number(i.quantity || 1),
                   subtotal: Number(i.subtotal || 0),
-                  special_notes: i.specialNotes || ''
+                  special_notes: sanitizeTextInput(i.specialNotes || '', 150)
                 }));
                 await supabase.from('order_items').insert(dbItems);
               }
             } else {
-              remaining.push(ord);
+              const retries = (ord.retries || 0) + 1;
+              const delay = Math.min(60000, Math.pow(2, retries) * 1500);
+              remaining.push({ ...ord, retries, nextRetryAt: now + delay });
             }
           } catch {
-            remaining.push(ord);
+            const retries = (ord.retries || 0) + 1;
+            const delay = Math.min(60000, Math.pow(2, retries) * 1500);
+            remaining.push({ ...ord, retries, nextRetryAt: now + delay });
           }
         }
         localStorage.setItem('mirchi_pending_sync_queue', JSON.stringify(remaining));
-        if (remaining.length < queue.length) {
+        if (anySynced) {
           loadSupabaseData();
         }
       } catch {}
@@ -721,42 +761,75 @@ export const AppProvider = ({ children }) => {
     loadSupabaseData();
     processOfflineQueue();
 
-    const channels = supabase.channel('mirchi-portal-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, payload => {
-        loadSupabaseData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, payload => {
-        loadSupabaseData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, payload => {
-        loadSupabaseData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'waiter_calls' }, payload => {
-        loadSupabaseData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'help_calls' }, payload => {
-        loadSupabaseData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'branch_reports' }, payload => {
-        loadSupabaseData();
-      })
-      .subscribe();
+    let channels = null;
+    let reconnectTimer = null;
+
+    const setupRealtimeChannel = () => {
+      try {
+        if (channels) {
+          supabase.removeChannel(channels);
+        }
+        channels = supabase.channel(`mirchi-portal-sync-${Date.now()}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+            loadSupabaseData();
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => {
+            loadSupabaseData();
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, () => {
+            loadSupabaseData();
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'waiter_calls' }, () => {
+            loadSupabaseData();
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'help_calls' }, () => {
+            loadSupabaseData();
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'branch_reports' }, () => {
+            loadSupabaseData();
+          })
+          .subscribe((status) => {
+            if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+              console.warn("Realtime channel state:", status, "re-establishing subscription...");
+              clearTimeout(reconnectTimer);
+              reconnectTimer = setTimeout(setupRealtimeChannel, 3000);
+            }
+          });
+      } catch (err) {
+        console.warn("Realtime setup exception:", err);
+      }
+    };
+
+    setupRealtimeChannel();
 
     const interval = setInterval(() => {
       processOfflineQueue();
       loadSupabaseData();
     }, 6000);
 
-    const handleOnline = () => {
+    const handleReconnection = () => {
       processOfflineQueue();
       loadSupabaseData();
+      setupRealtimeChannel();
     };
-    window.addEventListener('online', handleOnline);
+
+    window.addEventListener('online', handleReconnection);
+    window.addEventListener('focus', handleReconnection);
+    
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        handleReconnection();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('online', handleOnline);
-      supabase.removeChannel(channels);
+      clearTimeout(reconnectTimer);
+      window.removeEventListener('online', handleReconnection);
+      window.removeEventListener('focus', handleReconnection);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (channels) supabase.removeChannel(channels);
     };
   }, []);
 
@@ -795,6 +868,10 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const applySession = (sessionObj, token = null) => {
+    if (!isValidSessionObject(sessionObj)) {
+      return { success: false, message: "Invalid session structure." };
+    }
+
     if (sessionObj?.role === 'admin') {
       const activeAdminCount = activeSessions.filter(s => s.role === 'admin' && s.username !== sessionObj.username).length;
       if (activeAdminCount >= 3) {
@@ -809,8 +886,8 @@ export const AppProvider = ({ children }) => {
 
     const normalized = {
       id: sessionObj.sessionId || sessionObj.id || `sess-${Date.now()}`,
-      username: sessionObj.username,
-      name: sessionObj.name,
+      username: sanitizeTextInput(sessionObj.username, 50),
+      name: sanitizeTextInput(sessionObj.name, 60),
       role: sessionObj.role,
       branchId: branchSlug,
       privacyPin: sessionObj.privacyPin || sessionObj.privacy_pin || "9999",
@@ -836,19 +913,14 @@ export const AppProvider = ({ children }) => {
   };
 
   const loginStaff = async ({ role, username, pin, password, branchId }) => {
-    const inputPin = String(pin || password || '').trim();
-    const inputUser = String(username || '').trim().toLowerCase();
-
-    // Strict validation: PIN is strictly required
-    if (!inputPin) {
-      return { success: false, message: "Authentication PIN is strictly required." };
+    const isDigitsOnly = role !== 'admin';
+    const pinCheck = validatePin(pin || password, isDigitsOnly);
+    if (!pinCheck.valid) {
+      return { success: false, message: pinCheck.error || "Authentication PIN is strictly required." };
     }
 
-    if (role === 'kitchen' || role === 'manager') {
-      if (!/^\d{4}$/.test(inputPin)) {
-        return { success: false, message: `${role === 'kitchen' ? 'Kitchen' : 'Manager'} access requires a valid 4-digit numeric PIN.` };
-      }
-    }
+    const inputPin = pinCheck.sanitized;
+    const inputUser = sanitizeTextInput(username || '', 50).toLowerCase();
 
     if (role === 'admin') {
       if (!inputUser) {
@@ -937,9 +1009,10 @@ export const AppProvider = ({ children }) => {
   };
 
   const verifyPrivacyPin = (enteredPin) => {
-    if (!enteredPin || String(enteredPin).trim().length < 4) return false;
+    const pinCheck = validatePin(enteredPin, true);
+    if (!pinCheck.valid) return false;
     if (!currentSession) return false;
-    const clean = String(enteredPin).trim();
+    const clean = pinCheck.sanitized;
     return clean === currentSession.privacyPin || clean === '9999' || clean === currentSession.pin;
   };
 
@@ -973,14 +1046,24 @@ export const AppProvider = ({ children }) => {
     const branchUuid = getBranchUuid(selectedBranch.id);
     const tableUuid = getTableUuid(selectedBranch.id, selectedTableNumber);
 
-    const customerName = (orderData.customerName || "").trim();
-    const customerPhone = (orderData.customerPhone || "").trim();
-    const customerNotes = (orderData.notes || "").trim();
+    const customerName = sanitizeTextInput(orderData.customerName || "", 80);
+    const customerPhone = sanitizeTextInput(orderData.customerPhone || "", 30);
+    const customerNotes = sanitizeTextInput(orderData.notes || "", 400);
     
     // Store customer identity clearly in notes field for complete DB storage & kitchen display
     const combinedNotes = customerName || customerPhone
       ? `Customer: ${customerName}${customerPhone ? ` (${customerPhone})` : ''}${customerNotes ? ` | ${customerNotes}` : ''}`
       : customerNotes;
+
+    const sanitizedItems = (orderData.items || []).map(item => ({
+      itemId: item.itemId || item.id,
+      name: sanitizeTextInput(item.name || 'Item', 120),
+      variantName: item.variantName ? sanitizeTextInput(item.variantName, 60) : null,
+      unitPrice: Number(item.unitPrice || 0),
+      quantity: Math.max(1, Number(item.quantity || 1)),
+      subtotal: Number(item.subtotal || 0),
+      specialNotes: sanitizeTextInput(item.specialNotes || '', 150)
+    }));
 
     const newOrder = normalizeOrder({
       id: `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -999,7 +1082,7 @@ export const AppProvider = ({ children }) => {
       estimatedMinutes: null,
       totalAmount: Number(orderData.totalAmount || 0),
       total_amount: Number(orderData.totalAmount || 0),
-      items: orderData.items || [],
+      items: sanitizedItems,
       notes: combinedNotes,
       customerName: customerName,
       customer_name: customerName,
@@ -1022,7 +1105,7 @@ export const AppProvider = ({ children }) => {
     try { localStorage.setItem('mirchi_orders', JSON.stringify(updated)); } catch {}
     broadcastSync('SYNC_ORDERS', updated);
 
-    // Save to Supabase with explicit required fields and network error handling
+    // Save to Supabase with strict 8-second timeout & network fallback
     if (isSupabaseConfigured) {
       try {
         const orderInsertPayload = {
@@ -1035,14 +1118,21 @@ export const AppProvider = ({ children }) => {
           notes: combinedNotes
         };
 
-        const { data: dbOrder, error: orderErr } = await supabase
-          .from('orders')
-          .insert(orderInsertPayload)
-          .select();
+        const insertWithTimeout = async () => {
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("NETWORK_TIMEOUT_8S")), 8000)
+          );
+          const insertPromise = supabase
+            .from('orders')
+            .insert(orderInsertPayload)
+            .select();
+          return Promise.race([insertPromise, timeoutPromise]);
+        };
+
+        const { data: dbOrder, error: orderErr } = await insertWithTimeout();
 
         if (orderErr) {
-          console.error("Failed to insert order into Supabase:", orderErr);
-          // Save to offline pending queue for graceful retry
+          console.warn("Supabase order insert error:", orderErr);
           queueOfflineOrder(newOrder);
         } else if (dbOrder && dbOrder[0]) {
           const insertedOrderId = dbOrder[0].id;
@@ -1053,15 +1143,15 @@ export const AppProvider = ({ children }) => {
           newOrder.order_number = assignedOrderNumber;
 
           // Insert order items into order_items table
-          if (Array.isArray(orderData.items) && orderData.items.length > 0) {
-            const dbItems = orderData.items.map(item => ({
+          if (sanitizedItems.length > 0) {
+            const dbItems = sanitizedItems.map(item => ({
               order_id: insertedOrderId,
-              item_name: item.name || 'Item',
-              variant_name: item.variantName || null,
-              unit_price: Number(item.unitPrice || 0),
-              quantity: Number(item.quantity || 1),
-              subtotal: Number(item.subtotal || 0),
-              special_notes: item.specialNotes || ''
+              item_name: item.name,
+              variant_name: item.variantName,
+              unit_price: item.unitPrice,
+              quantity: item.quantity,
+              subtotal: item.subtotal,
+              special_notes: item.specialNotes
             }));
 
             const { error: itemsErr } = await supabase.from('order_items').insert(dbItems);
@@ -1079,7 +1169,7 @@ export const AppProvider = ({ children }) => {
           broadcastSync('SYNC_ORDERS', updated);
         }
       } catch (networkErr) {
-        console.warn("Network error during order submission. Queuing for background sync:", networkErr);
+        console.warn("Order submission network timeout or disconnect, queuing for background sync:", networkErr);
         queueOfflineOrder(newOrder);
       }
     }
@@ -1215,6 +1305,9 @@ export const AppProvider = ({ children }) => {
   };
 
   const submitComplaint = (message) => {
+    const cleanMessage = sanitizeTextInput(message, 500);
+    if (!cleanMessage) return null;
+
     const currentShift = getCurrentShift();
     const branchUuid = getBranchUuid(selectedBranch.id);
     const newComplaint = normalizeComplaint({
@@ -1224,7 +1317,7 @@ export const AppProvider = ({ children }) => {
       branch_id: branchUuid,
       tableNumber: selectedTableNumber,
       table_number: selectedTableNumber,
-      message,
+      message: cleanMessage,
       status: "open",
       shiftType: currentShift.shiftType,
       shiftId: currentShift.shiftId,
@@ -1251,6 +1344,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const callWaiter = (requestType = "Assistance Requested") => {
+    const cleanType = sanitizeTextInput(requestType, 100) || "Assistance Requested";
     const currentShift = getCurrentShift();
     const branchUuid = getBranchUuid(selectedBranch.id);
     const newCall = normalizeWaiterCall({
@@ -1260,7 +1354,7 @@ export const AppProvider = ({ children }) => {
       branch_id: branchUuid,
       tableNumber: selectedTableNumber,
       table_number: selectedTableNumber,
-      requestType,
+      requestType: cleanType,
       status: "pending",
       shiftType: currentShift.shiftType,
       shiftId: currentShift.shiftId,
@@ -1287,6 +1381,8 @@ export const AppProvider = ({ children }) => {
   };
 
   const sendKitchenHelpCall = (stationName, message) => {
+    const cleanStation = sanitizeTextInput(stationName, 100) || "Kitchen Station";
+    const cleanMessage = sanitizeTextInput(message, 500);
     const currentShift = getCurrentShift();
     const branchForCall = currentSession?.branchId || selectedBranch.id;
     const branchUuid = getBranchUuid(branchForCall);
@@ -1295,8 +1391,8 @@ export const AppProvider = ({ children }) => {
       restaurant_id: RESTAURANT_ID,
       branchId: branchForCall,
       branch_id: branchUuid,
-      stationName,
-      message,
+      stationName: cleanStation,
+      message: cleanMessage,
       status: "active",
       shiftType: currentShift.shiftType,
       shiftId: currentShift.shiftId,
@@ -1323,46 +1419,58 @@ export const AppProvider = ({ children }) => {
   };
 
   const toggleItemStock = (itemId) => {
+    if (!currentSession || (currentSession.role !== 'admin' && currentSession.role !== 'manager')) {
+      console.warn("Unauthorized attempt to modify menu item stock");
+      return;
+    }
     const updated = menuItems.map(item => item.id === itemId ? { ...item, isOutOfStock: !item.isOutOfStock } : item);
     setMenuItems(updated);
     broadcastSync('SYNC_MENU', updated);
   };
 
   const saveMenuItem = (itemData) => {
+    if (!currentSession || (currentSession.role !== 'admin' && currentSession.role !== 'manager')) {
+      console.warn("Unauthorized attempt to save menu item");
+      return;
+    }
     let updated;
     if (itemData.id) {
-      updated = menuItems.map(i => i.id === itemData.id ? { ...i, ...itemData } : i);
+      updated = menuItems.map(i => i.id === itemData.id ? { ...i, ...itemData, name: sanitizeTextInput(itemData.name, 100) } : i);
     } else {
-      updated = [...menuItems, { ...itemData, id: `item-${Date.now()}`, isOutOfStock: false }];
+      updated = [...menuItems, { ...itemData, name: sanitizeTextInput(itemData.name, 100), id: `item-${Date.now()}`, isOutOfStock: false }];
     }
     setMenuItems(updated);
     broadcastSync('SYNC_MENU', updated);
   };
 
   const addBranchReport = (reportData) => {
+    if (!currentSession || (currentSession.role !== 'admin' && currentSession.role !== 'manager')) {
+      console.warn("Unauthorized attempt to add branch report");
+      return null;
+    }
     const currentShift = getCurrentShift();
     const branchForReport = (currentSession?.role !== 'admin') ? (currentSession?.branchId || selectedBranch.id) : selectedBranch.id;
     const newReport = {
       id: `rep-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       branchId: branchForReport,
       branch_id: branchForReport,
-      managerName: currentSession?.name || "Manager",
-      manager_name: currentSession?.name || "Manager",
+      managerName: sanitizeTextInput(currentSession?.name || "Manager", 80),
+      manager_name: sanitizeTextInput(currentSession?.name || "Manager", 80),
       shiftName: reportData.shiftName || currentShift.shiftName,
       shift_name: reportData.shiftName || currentShift.shiftName,
       shiftType: reportData.shiftType || currentShift.shiftType,
       shift_type: reportData.shiftType || currentShift.shiftType,
       shiftId: currentShift.shiftId,
       shift_id: currentShift.shiftId,
-      reportType: reportData.reportType || "Incident",
-      report_type: reportData.reportType || "Incident",
+      reportType: sanitizeTextInput(reportData.reportType || "Incident", 50),
+      report_type: sanitizeTextInput(reportData.reportType || "Incident", 50),
       totalShiftSales: Number(reportData.totalShiftSales || 0),
       total_shift_sales: Number(reportData.totalShiftSales || 0),
       totalOrdersCount: Number(reportData.totalOrdersCount || 0),
       total_orders_count: Number(reportData.totalOrdersCount || 0),
       cancelledOrdersCount: Number(reportData.cancelledOrdersCount || 0),
       cancelled_orders_count: Number(reportData.cancelledOrdersCount || 0),
-      content: reportData.content || "",
+      content: sanitizeTextInput(reportData.content || "", 2000),
       createdAt: new Date().toISOString(),
       created_at: new Date().toISOString()
     };
@@ -1417,6 +1525,10 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteBranchReport = (id) => {
+    if (!currentSession || currentSession.role !== 'admin') {
+      console.warn("Unauthorized: Only Super Admin can delete branch reports");
+      return;
+    }
     const updated = branchReports.filter(r => r.id !== id);
     setBranchReports(updated);
     broadcastSync('SYNC_REPORTS', updated);
@@ -1424,6 +1536,10 @@ export const AppProvider = ({ children }) => {
   };
 
   const clearAllOrders = () => {
+    if (!currentSession || currentSession.role !== 'admin') {
+      console.warn("Unauthorized: Only Super Admin can clear all orders");
+      return;
+    }
     setOrders([]);
     setOrderCounter(0);
     setComplaints([]);
