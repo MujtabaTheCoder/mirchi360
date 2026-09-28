@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
 import {
@@ -11,6 +11,72 @@ import { CustomerIdentityModal } from './CustomerIdentityModal';
 import { ErrorBoundary } from '../shared/ErrorBoundary';
 import { sanitizeTextInput } from '../../lib/security';
 import { useMenuItems } from '../../hooks/useMenuItems';
+
+// ── Memoized sub-components to prevent re-renders from timer ticks ──────────
+
+const MenuItemCard = memo(({ item, onAdd }) => (
+  <div
+    className={`menu-card bg-slate-900/90 border rounded-2xl p-3 flex space-x-3 transition relative overflow-hidden ${
+      item.isOutOfStock
+        ? 'border-slate-800/80 opacity-60 grayscale'
+        : 'border-slate-800 hover:border-slate-700 shadow-lg'
+    }`}
+  >
+    <div className="w-24 h-24 rounded-xl overflow-hidden bg-slate-950 flex-shrink-0 relative">
+      <img src={item.image} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+      {item.isOutOfStock && (
+        <div className="absolute inset-0 bg-black/80 flex items-center justify-center p-1">
+          <span className="text-[10px] font-black text-rose-400 uppercase tracking-tighter text-center">Sold Out</span>
+        </div>
+      )}
+    </div>
+    <div className="flex-1 flex flex-col justify-between py-0.5">
+      <div>
+        <div className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">{item.categoryName}</div>
+        <h3 className="font-bold text-sm text-slate-100 line-clamp-1 leading-snug">{item.name}</h3>
+        <div className="text-xs font-black text-amber-400 mt-1">
+          PKR {item.price}
+          {item.hasVariants && <span className="text-[10px] text-slate-400 font-normal ml-1">(Variants available)</span>}
+        </div>
+      </div>
+      <div className="pt-2 flex justify-end">
+        {item.isOutOfStock ? (
+          <button disabled className="px-3 py-1 bg-slate-800 text-slate-500 rounded-lg text-xs font-semibold cursor-not-allowed">
+            Unavailable
+          </button>
+        ) : (
+          <button
+            onClick={() => onAdd(item)}
+            className="gpu-accelerate px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center space-x-1 shadow-md shadow-rose-900/50 transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>{item.hasVariants ? 'Select Size' : 'Add'}</span>
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+));
+MenuItemCard.displayName = 'MenuItemCard';
+
+const OrderStatusBadge = memo(({ status }) => (
+  <div className={`status-badge px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wide flex items-center space-x-1.5 ${
+    status === 'pending'   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse' :
+    status === 'preparing' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+    status === 'ready'     ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-bounce' :
+    status === 'served'    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                             'bg-slate-800 text-slate-400'
+  }`}>
+    {status === 'pending'   && <Clock className="w-3.5 h-3.5" />}
+    {status === 'preparing' && <ChefHat className="w-3.5 h-3.5 text-blue-400" />}
+    {status === 'ready'     && <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
+    {status === 'served'    && <Utensils className="w-3.5 h-3.5 text-purple-400" />}
+    <span>{status}</span>
+  </div>
+));
+OrderStatusBadge.displayName = 'OrderStatusBadge';
+
+// ── Main Component ───────────────────────────────────────────────────────────
 
 export const CustomerApp = () => {
   const { t, i18n } = useTranslation();
@@ -32,7 +98,6 @@ export const CustomerApp = () => {
   const [orderNotes, setOrderNotes] = useState("");
   const [activeTab, setActiveTab] = useState("menu");
 
-
   // Modal States
   const [isComplaintModalOpen, setIsComplaintModalOpen] = useState(false);
   const [complaintText, setComplaintText] = useState("");
@@ -53,11 +118,13 @@ export const CustomerApp = () => {
   const [selectedItemForVariant, setSelectedItemForVariant] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
 
-  // Filter categories
-  const categories = ["ALL", ...new Set((menuItems || []).map(item => item?.categoryName).filter(Boolean))];
+  // ── Memoized derived state (no recalc unless inputs change) ─────────────
+  const categories = useMemo(
+    () => ["ALL", ...new Set((menuItems || []).map(item => item?.categoryName).filter(Boolean))],
+    [menuItems]
+  );
 
-  // Filtered Menu Items
-  const filteredItems = (menuItems || []).filter(item => {
+  const filteredItems = useMemo(() => (menuItems || []).filter(item => {
     if (!item) return false;
     const itemName = item.name || '';
     const itemCat = item.categoryName || '';
@@ -65,61 +132,46 @@ export const CustomerApp = () => {
     const matchesCat = activeCategory === "ALL" || itemCat === activeCategory;
     const matchesSearch = itemName.toLowerCase().includes(query) || itemCat.toLowerCase().includes(query);
     return matchesCat && matchesSearch;
-  });
+  }), [menuItems, activeCategory, searchQuery]);
 
-  // Filter orders for THIS table & branch (with complete null-safety)
-  const allTableOrders = (orders || []).filter(o => 
-    o && 
-    Number(o.tableNumber || o.table_number) === Number(selectedTableNumber) && 
+  const allTableOrders = useMemo(() => (orders || []).filter(o =>
+    o &&
+    Number(o.tableNumber || o.table_number) === Number(selectedTableNumber) &&
     (o.branchId === selectedBranch?.id || o.branch_id === selectedBranch?.id)
-  );
+  ), [orders, selectedTableNumber, selectedBranch?.id]);
 
-  // ACTIVE ORDERS (pending, preparing, ready, served but UNPAID)
-  // When manager marks bill paid (payment === 'Paid' or status === 'completed'), the order immediately disappears from customer's active view!
-  const activeTableOrders = allTableOrders.filter(o => 
-    o && 
-    o.status !== 'completed' && 
-    o.status !== 'cancelled' && 
+  const activeTableOrders = useMemo(() => allTableOrders.filter(o =>
+    o &&
+    o.status !== 'completed' &&
+    o.status !== 'cancelled' &&
     o.payment !== 'Paid'
-  );
+  ), [allTableOrders]);
 
-  // Add Item to Cart
-  const handleAddToCart = (item, variant = null) => {
+  const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + item.subtotal, 0), [cart]);
+
+  // ── Stable callback refs (no re-creation on re-render) ──────────────────
+  const handleAddToCart = useCallback((item, variant = null) => {
     if (item.isOutOfStock) return;
-
     if (item.hasVariants && !variant) {
       setSelectedItemForVariant(item);
       setSelectedVariant(item.variants ? item.variants[0] : null);
       return;
     }
-
     const itemPrice = variant ? variant.price : item.price;
     const itemKey = variant ? `${item.id}-${variant.name}` : item.id;
-
     setCart(prev => {
       const existing = prev.find(i => i.cartKey === itemKey);
       if (existing) {
         return prev.map(i => i.cartKey === itemKey ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * itemPrice } : i);
       }
-      return [...prev, {
-        cartKey: itemKey,
-        itemId: item.id,
-        name: item.name,
-        variantName: variant ? variant.name : null,
-        unitPrice: itemPrice,
-        quantity: 1,
-        subtotal: itemPrice,
-        specialNotes: ""
-      }];
+      return [...prev, { cartKey: itemKey, itemId: item.id, name: item.name, variantName: variant ? variant.name : null, unitPrice: itemPrice, quantity: 1, subtotal: itemPrice, specialNotes: "" }];
     });
-
     setSelectedItemForVariant(null);
     setSelectedVariant(null);
-
     showToast(`Added ${item.name} to cart`);
-  };
+  }, []);
 
-  const updateCartQuantity = (cartKey, delta) => {
+  const updateCartQuantity = useCallback((cartKey, delta) => {
     setCart(prev => prev.map(item => {
       if (item.cartKey === cartKey) {
         const newQty = item.quantity + delta;
@@ -128,20 +180,22 @@ export const CustomerApp = () => {
       }
       return item;
     }).filter(Boolean));
-  };
+  }, []);
 
-  const updateItemNotes = (cartKey, notes) => {
+  const updateItemNotes = useCallback((cartKey, notes) => {
     setCart(prev => prev.map(item => item.cartKey === cartKey ? { ...item, specialNotes: notes } : item));
-  };
+  }, []);
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
+  const showToast = useCallback((msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(""), 3500);
+  }, []);
 
-  const executeOrderSubmission = async (name, phone) => {
+  const executeOrderSubmission = useCallback(async (name, phone) => {
     setIsSubmittingOrder(true);
     try {
       const finalName = name || `Table ${selectedTableNumber} Guest`;
       const cleanNotes = sanitizeTextInput(orderNotes, 300);
-
       const confirmedOrder = await createOrder({
         items: cart,
         totalAmount: cartTotal,
@@ -149,62 +203,52 @@ export const CustomerApp = () => {
         customerName: finalName,
         customerPhone: phone || ""
       });
-
       try {
         localStorage.setItem('mirchi_customer_identity', JSON.stringify({ name: finalName, phone: phone || "", skipped: true }));
       } catch { }
-
       setCart([]);
       setOrderNotes("");
       setIsCartOpen(false);
       setActiveTab("tracking");
-
       const assignedNumber = confirmedOrder?.orderNumber || confirmedOrder?.order_number || "Active";
       showToast(`Order #${assignedNumber} placed! (Table ${selectedTableNumber})`);
     } catch (err) {
-      console.error("Order submission error:", err);
-      showToast("Order queued! Synchronizing with kitchen...");
+      // Silent in production — user sees a toast
+      showToast("Connection issue. Please try again.");
     } finally {
       setIsSubmittingOrder(false);
     }
-  };
+  }, [cart, cartTotal, createOrder, orderNotes, selectedTableNumber, showToast]);
 
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrder = useCallback(async () => {
     if (cart.length === 0 || isSubmittingOrder) return;
-
     const trimmedName = sanitizeTextInput(customerIdentity.name || "", 80);
     const trimmedPhone = sanitizeTextInput(customerIdentity.phone || "", 30);
-
-    // If customer has not entered both identity details, enforce it
     if (!trimmedName || !trimmedPhone) {
       setIsIdentityModalOpen(true);
       return;
     }
-
     await executeOrderSubmission(trimmedName, trimmedPhone);
-  };
+  }, [cart.length, isSubmittingOrder, customerIdentity, executeOrderSubmission]);
 
-  const handleIdentitySave = async (identity) => {
+  const handleIdentitySave = useCallback(async (identity) => {
     const cleanName = sanitizeTextInput(identity.name || "", 80);
     const cleanPhone = sanitizeTextInput(identity.phone || "", 30);
     const cleanIdentity = { name: cleanName, phone: cleanPhone, skipped: true };
     setCustomerIdentity(cleanIdentity);
-    try {
-      localStorage.setItem('mirchi_customer_identity', JSON.stringify(cleanIdentity));
-    } catch { }
+    try { localStorage.setItem('mirchi_customer_identity', JSON.stringify(cleanIdentity)); } catch { }
     setIsIdentityModalOpen(false);
-
     if (cart.length > 0) {
       await executeOrderSubmission(cleanName, cleanPhone);
     }
-  };
+  }, [cart.length, executeOrderSubmission]);
 
-  const handleCallWaiterClick = () => {
+  const handleCallWaiterClick = useCallback(() => {
     callWaiter("Customer requested assistance");
     showToast("Waiter alert sent! A team member is on their way to Table " + selectedTableNumber + ".");
-  };
+  }, [callWaiter, selectedTableNumber, showToast]);
 
-  const handleComplaintSubmit = (e) => {
+  const handleComplaintSubmit = useCallback((e) => {
     e.preventDefault();
     const cleanComplaint = sanitizeTextInput(complaintText, 500);
     if (!cleanComplaint) return;
@@ -212,12 +256,9 @@ export const CustomerApp = () => {
     setComplaintText("");
     setIsComplaintModalOpen(false);
     showToast("Complaint sent directly to Branch Manager.");
-  };
+  }, [complaintText, submitComplaint, showToast]);
 
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(""), 3500);
-  };
+
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-24 relative font-sans overflow-x-hidden">
@@ -331,69 +372,10 @@ export const CustomerApp = () => {
               ))}
             </div>
 
-            {/* Menu Items Grid */}
+            {/* Menu Items Grid — uses memoized MenuItemCard to prevent full re-renders */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               {filteredItems.map((item) => (
-                <div
-                  key={item.id}
-                  className={`bg-slate-900/90 border rounded-2xl p-3 flex space-x-3 transition relative overflow-hidden ${item.isOutOfStock
-                      ? 'border-slate-800/80 opacity-60 grayscale'
-                      : 'border-slate-800 hover:border-slate-700 shadow-lg'
-                    }`}
-                >
-                  {/* Item Image */}
-                  <div className="w-24 h-24 rounded-xl overflow-hidden bg-slate-950 flex-shrink-0 relative">
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                    {item.isOutOfStock && (
-                      <div className="absolute inset-0 bg-black/80 flex items-center justify-center p-1">
-                        <span className="text-[10px] font-black text-rose-400 uppercase tracking-tighter text-center">
-                          Sold Out
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Item Details */}
-                  <div className="flex-1 flex flex-col justify-between py-0.5">
-                    <div>
-                      <div className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">
-                        {item.categoryName}
-                      </div>
-                      <h3 className="font-bold text-sm text-slate-100 line-clamp-1 leading-snug">
-                        {item.name}
-                      </h3>
-                      <div className="text-xs font-black text-amber-400 mt-1">
-                        PKR {item.price}
-                        {item.hasVariants && <span className="text-[10px] text-slate-400 font-normal ml-1">(Variants available)</span>}
-                      </div>
-                    </div>
-
-                    {/* Add to Cart Button */}
-                    <div className="pt-2 flex justify-end">
-                      {item.isOutOfStock ? (
-                        <button
-                          disabled
-                          className="px-3 py-1 bg-slate-800 text-slate-500 rounded-lg text-xs font-semibold cursor-not-allowed"
-                        >
-                          Unavailable
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleAddToCart(item)}
-                          className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center space-x-1 shadow-md shadow-rose-900/50 transition"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>{item.hasVariants ? 'Select Size' : 'Add'}</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <MenuItemCard key={item.id} item={item} onAdd={handleAddToCart} />
               ))}
             </div>
           </>
@@ -432,7 +414,7 @@ export const CustomerApp = () => {
                 return (
                   <div
                     key={order.id}
-                    className="bg-slate-900 border border-slate-800 rounded-3xl p-4.5 space-y-3 shadow-2xl border-l-4 border-l-rose-500"
+                    className="order-card bg-slate-900 border border-slate-800 rounded-3xl p-4.5 space-y-3 shadow-2xl border-l-4 border-l-rose-500"
                   >
                     {/* Header */}
                     <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -445,20 +427,8 @@ export const CustomerApp = () => {
                           Placed at {formatPakistanTime(order.createdAt)}
                         </div>
                       </div>
-
-                      {/* Status Badge */}
-                      <div className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wide flex items-center space-x-1.5 ${order.status === 'pending' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse' :
-                          order.status === 'preparing' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                            order.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-bounce' :
-                              order.status === 'served' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
-                                'bg-slate-800 text-slate-400'
-                        }`}>
-                        {order.status === 'pending' && <Clock className="w-3.5 h-3.5" />}
-                        {order.status === 'preparing' && <ChefHat className="w-3.5 h-3.5 text-blue-400" />}
-                        {order.status === 'ready' && <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
-                        {order.status === 'served' && <Utensils className="w-3.5 h-3.5 text-purple-400" />}
-                        <span>{order.status}</span>
-                      </div>
+                      {/* Status Badge — memoized, only re-renders on status change */}
+                      <OrderStatusBadge status={order.status} />
                     </div>
 
                     {/* 1. If preparing: Show Kitchen Preparation Timer */}
@@ -561,13 +531,13 @@ export const CustomerApp = () => {
         </ErrorBoundary>
       </main>
 
-      {/* Floating Cart Button */}
+      {/* Floating Cart Button — GPU composite layer */}
       {cart.length > 0 && activeTab === "menu" && (
-        <div className="fixed bottom-4 left-0 right-0 z-40 px-4">
+        <div className="cart-float fixed bottom-4 left-0 right-0 z-40 px-4">
           <div className="max-w-xl mx-auto">
             <button
               onClick={() => setIsCartOpen(true)}
-              className="w-full bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold p-3.5 rounded-2xl shadow-2xl shadow-rose-950/80 flex items-center justify-between transition transform active:scale-98 border border-rose-400/30"
+              className="gpu-accelerate w-full bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold p-3.5 rounded-2xl shadow-2xl shadow-rose-950/80 flex items-center justify-between transition transform active:scale-98 border border-rose-400/30"
             >
               <div className="flex items-center space-x-3">
                 <div className="bg-white/20 px-2.5 py-1 rounded-xl text-xs font-black">
@@ -584,10 +554,10 @@ export const CustomerApp = () => {
         </div>
       )}
 
-      {/* Cart Modal / Sheet */}
+      {/* Cart Modal — GPU composite layer pre-allocated for smooth slide-in */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-0 sm:p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in slide-in-from-bottom duration-200">
+        <div className="modal-layer fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-0 sm:p-4">
+          <div className="gpu-accelerate bg-slate-900 border border-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in slide-in-from-bottom duration-200">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
               <div className="flex items-center space-x-2">
                 <ShoppingBag className="w-5 h-5 text-rose-500" />

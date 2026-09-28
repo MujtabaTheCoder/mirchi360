@@ -496,7 +496,7 @@ export const AppProvider = ({ children }) => {
       setCurrentShift(prevShift => {
         if (newShift.shiftType !== prevShift.shiftType) {
           setPreviousShift(prevShift);
-          console.log(`Shift changed from ${prevShift.shiftType} to ${newShift.shiftType}. Sessions remain active.`);
+          // Shift changed — sessions remain active, no re-login needed
         }
         return newShift;
       });
@@ -877,25 +877,18 @@ export const AppProvider = ({ children }) => {
         if (channels) {
           supabase.removeChannel(channels);
         }
-        channels = supabase.channel(`mirchi-portal-sync-${Date.now()}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-            loadSupabaseData();
+        channels = supabase.channel(`mirchi-portal-sync-${Date.now()}`, {
+            config: { broadcast: { self: false }, presence: { key: '' } }
           })
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => {
-            loadSupabaseData();
-          })
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, () => {
-            loadSupabaseData();
-          })
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'waiter_calls' }, () => {
-            loadSupabaseData();
-          })
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'help_calls' }, () => {
-            loadSupabaseData();
-          })
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'branch_reports' }, () => {
-            loadSupabaseData();
-          })
+          .on('postgres_changes', {
+            event: '*', schema: 'public', table: 'orders',
+            // Listen to all order events — INSERT for new orders, UPDATE for status changes
+          }, () => { loadSupabaseData(); })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => { loadSupabaseData(); })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, () => { loadSupabaseData(); })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'waiter_calls' }, () => { loadSupabaseData(); })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'help_calls' }, () => { loadSupabaseData(); })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'branch_reports' }, () => { loadSupabaseData(); })
           .subscribe((status) => {
             if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') {
               console.warn("Realtime channel state:", status, "re-establishing subscription...");

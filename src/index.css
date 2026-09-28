@@ -5,6 +5,10 @@
 @layer base {
   html, body, #root {
     @apply bg-slate-950 text-slate-100 min-h-screen font-sans overflow-x-hidden;
+    /* GPU compositing layer for root — eliminates layout shifts */
+    transform: translateZ(0);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
@@ -25,6 +29,56 @@
   }
   .touch-pan-x {
     touch-action: pan-x;
+  }
+
+  /* ── GPU-Accelerated Animation Utilities ─────────────────────────── */
+  /* Apply to any animated/transition element for 60fps mobile rendering */
+  .gpu-accelerate {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  /* Status badge — only composited layers animate */
+  .status-badge {
+    will-change: opacity;
+    transform: translateZ(0);
+  }
+
+  /* Order card hover — prevents layout thrashing */
+  .order-card {
+    will-change: transform;
+    transform: translateZ(0);
+    contain: layout style;
+  }
+
+  /* Menu item card — GPU layer, no layout recalc on hover */
+  .menu-card {
+    will-change: transform;
+    transform: translateZ(0);
+    contain: layout style paint;
+  }
+
+  /* Modal/Drawer — composite layer pre-allocated */
+  .modal-layer {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  /* Timer / ticking element — isolate on own compositor layer */
+  .timer-element {
+    will-change: contents;
+    contain: strict;
+    transform: translateZ(0);
+  }
+
+  /* Float cart button — always on GPU */
+  .cart-float {
+    will-change: transform, opacity;
+    transform: translateZ(0);
   }
 }
 
@@ -97,5 +151,14 @@
   }
   .no-print {
     display: none !important;
+  }
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
