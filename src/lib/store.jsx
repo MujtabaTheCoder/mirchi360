@@ -20,6 +20,7 @@ import {
 
 
 // Automatically purge all demo / seed items from localStorage on startup
+// Also wipe orders cache if Supabase is configured so DB is always the source of truth
 const purgeDemoDataFromStorage = () => {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
@@ -37,7 +38,7 @@ const purgeDemoDataFromStorage = () => {
         try {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            const clean = parsed.filter(item => item && !String(item.id).includes('seed') && !String(item.id).startsWith('seed-'));
+            const clean = parsed.filter(item => item && !String(item.id).includes('seed') && !String(item.id).startsWith('seed-') && item.notes !== '[PURGED_DEMO]');
             localStorage.setItem(key, JSON.stringify(clean));
           }
         } catch {}
@@ -48,6 +49,22 @@ const purgeDemoDataFromStorage = () => {
   }
 };
 purgeDemoDataFromStorage();
+
+// If Supabase is configured, ALWAYS clear the orders localStorage cache on startup.
+// This ensures the database is the single source of truth — stale cached orders
+// from previous sessions will never contaminate a fresh load.
+const clearStaleOrdersCache = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || '';
+    const supabaseKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || '';
+    if (supabaseUrl && supabaseKey) {
+      localStorage.setItem('mirchi_orders', JSON.stringify([]));
+      localStorage.setItem('mirchi_order_counter', '0');
+    }
+  } catch {}
+};
+clearStaleOrdersCache();
 
 const AppContext = createContext(null);
 
@@ -596,7 +613,7 @@ export const AppProvider = ({ children }) => {
         { data: auditData },
         { data: shiftClosingsData }
       ] = await Promise.all([
-        supabase.from('orders').select('id, order_number, restaurant_id, branch_id, table_id, table_number, status, estimated_minutes, total_amount, notes, created_at, order_items(id, item_name, variant_name, unit_price, quantity, subtotal, special_notes)').eq('is_archived', false).order('created_at', { ascending: false }),
+        supabase.from('orders').select('id, order_number, restaurant_id, branch_id, table_id, table_number, status, estimated_minutes, total_amount, notes, created_at, order_items(id, item_name, variant_name, unit_price, quantity, subtotal, special_notes)').neq('status', 'cancelled').order('created_at', { ascending: false }),
         supabase.from('complaints').select('id, restaurant_id, branch_id, table_number, message, status, created_at').eq('status', 'open').order('created_at', { ascending: false }),
         supabase.from('waiter_calls').select('id, restaurant_id, branch_id, table_number, request_type, status, created_at').eq('status', 'pending').order('created_at', { ascending: false }),
         supabase.from('help_calls').select('id, restaurant_id, branch_id, station_name, message, status, created_at').eq('status', 'active').order('created_at', { ascending: false }),
@@ -607,10 +624,14 @@ export const AppProvider = ({ children }) => {
 
       if (ordersErr) {
         console.warn("Error querying orders with items:", ordersErr);
+        // On query error, do NOT fall back to stale localStorage — show empty
+        setOrders([]);
+        try { localStorage.setItem('mirchi_orders', JSON.stringify([])); } catch {}
       }
 
-      if (ordersData) {
-        const realOrders = ordersData
+      // ordersData is always set (even as empty array) when query succeeds
+      if (!ordersErr) {
+        const realOrders = (ordersData || [])
           .filter(o => o && !String(o.id).includes('seed') && !String(o.id).startsWith('seed-') && o.notes !== '[PURGED_DEMO]')
           .map(normalizeOrder);
 
@@ -637,6 +658,10 @@ export const AppProvider = ({ children }) => {
           return dbOrder;
         });
 
+        // ALWAYS write the authoritative DB result to localStorage (even empty array)
+        // This ensures stale cache can never outlive a DB wipe
+        try { localStorage.setItem('mirchi_orders', JSON.stringify(mergedOrders)); } catch {}
+
         setOrders(prev => {
           if (prev.length === mergedOrders.length) {
             const isSame = prev.every((p, idx) => {
@@ -652,7 +677,6 @@ export const AppProvider = ({ children }) => {
             });
             if (isSame) return prev;
           }
-          try { localStorage.setItem('mirchi_orders', JSON.stringify(mergedOrders)); } catch {}
           return mergedOrders;
         });
 
