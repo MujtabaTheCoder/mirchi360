@@ -36,7 +36,8 @@ export const AdminApp = () => {
     logoutStaff,
     currentShift,
     previousShift,
-    refreshOrders
+    refreshOrders,
+    shiftClosings
   } = useApp();
 
   useEffect(() => {
@@ -1201,99 +1202,73 @@ export const AdminApp = () => {
       {activeTab === "shift_analytics" && (
         <div className="space-y-5">
           <div className="flex justify-between items-center">
-            <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
-              Shift-Wise Sales & Complaints Breakdown ({periodType.toUpperCase()})
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-3 shadow-xl border-t-4 border-t-amber-400">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center space-x-2 text-amber-400">
-                  <Sun className="w-5 h-5" />
-                  <h3 className="font-extrabold text-sm text-slate-100">Morning Shift</h3>
-                </div>
-                <span className="text-[11px] text-slate-400 font-semibold">06:00 AM - 02:00 PM</span>
-              </div>
-              <div className="text-2xl font-black text-amber-400">PKR {morningStats.sales.toLocaleString()}</div>
-              <div className="flex justify-between text-xs text-slate-300 border-t border-slate-800 pt-2 font-semibold">
-                <span>Completed Orders: <strong>{morningStats.count}</strong></span>
-                <span>Complaints: <strong className="text-rose-400">{morningStats.complaints}</strong></span>
-              </div>
-            </div>
-
-            <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-3 shadow-xl border-t-4 border-t-rose-500">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center space-x-2 text-rose-500">
-                  <Sunset className="w-5 h-5" />
-                  <h3 className="font-extrabold text-sm text-slate-100">Evening Shift</h3>
-                </div>
-                <span className="text-[11px] text-slate-400 font-semibold">02:00 PM - 10:00 PM</span>
-              </div>
-              <div className="text-2xl font-black text-rose-400">PKR {eveningStats.sales.toLocaleString()}</div>
-              <div className="flex justify-between text-xs text-slate-300 border-t border-slate-800 pt-2 font-semibold">
-                <span>Completed Orders: <strong>{eveningStats.count}</strong></span>
-                <span>Complaints: <strong className="text-rose-400">{eveningStats.complaints}</strong></span>
-              </div>
-            </div>
-
-            <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-3 shadow-xl border-t-4 border-t-blue-500">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center space-x-2 text-blue-400">
-                  <Moon className="w-5 h-5" />
-                  <h3 className="font-extrabold text-sm text-slate-100">Night Shift</h3>
-                </div>
-                <span className="text-[11px] text-slate-400 font-semibold">10:00 PM - 06:00 AM</span>
-              </div>
-              <div className="text-2xl font-black text-blue-400">PKR {nightStats.sales.toLocaleString()}</div>
-              <div className="flex justify-between text-xs text-slate-300 border-t border-slate-800 pt-2 font-semibold">
-                <span>Completed Orders: <strong>{nightStats.count}</strong></span>
-                <span>Complaints: <strong className="text-rose-400">{nightStats.complaints}</strong></span>
-              </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
+                Historical Shift Closing Reports ({periodType.toUpperCase()})
+              </h2>
+              <p className="text-xs text-slate-400">View permanent Z-Reports from completed shifts across all branches.</p>
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3">
-            <h3 className="font-extrabold text-xs text-slate-200 uppercase tracking-wider">
-              Permanent Manager Handover & Shift Closing Reports
-            </h3>
-            <div className="space-y-3">
-              {filteredReports.map(rep => (
-                <div key={rep.id} className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2 text-xs">
-                  <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-amber-400">{rep.shiftName} Handover — Manager: {rep.managerName}</span>
-                      <span className="text-[10px] text-slate-500 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-full">
-                        {rep.branchId === 'branch-def' ? 'Defence' : 'Qasimabad'}
+          {shiftClosings.filter(s => {
+            const isDateMatch = isDateInPeriod(s.date || s.closed_at);
+            const isBranchMatch = filterBranch === 'ALL' || (s.branchId || s.branch_id) === filterBranch;
+            const isShiftMatch = filterShift === 'ALL' || s.shift_type === filterShift;
+            return isDateMatch && isBranchMatch && isShiftMatch;
+          }).length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-3 shadow-xl">
+              <Archive className="w-10 h-10 text-slate-600 mx-auto" />
+              <h3 className="text-sm font-bold text-slate-300">No Z-Reports Found</h3>
+              <p className="text-xs text-slate-500">No shift closings recorded for this date/branch combination.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {shiftClosings.filter(s => {
+                const isDateMatch = isDateInPeriod(s.date || s.closed_at);
+                const isBranchMatch = filterBranch === 'ALL' || (s.branchId || s.branch_id) === filterBranch;
+                const isShiftMatch = filterShift === 'ALL' || s.shift_type === filterShift;
+                return isDateMatch && isBranchMatch && isShiftMatch;
+              }).map(shift => (
+                <div key={shift.id} className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl hover:border-slate-700 transition space-y-4">
+                  <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                    <div className="flex items-center space-x-3 text-amber-400">
+                      {shift.shift_type === 'Morning' && <Sun className="w-5 h-5 text-amber-400" />}
+                      {shift.shift_type === 'Evening' && <Sunset className="w-5 h-5 text-rose-500" />}
+                      {shift.shift_type === 'Night' && <Moon className="w-5 h-5 text-blue-400" />}
+                      <h3 className="font-extrabold text-sm text-slate-100">{shift.shift_type} Shift Closing</h3>
+                      <span className="text-xs bg-slate-950 text-amber-400 border border-slate-800 px-2 py-0.5 rounded-lg font-mono">
+                        {shift.branch_id === 'branch-def' ? 'Defence' : 'Qasimabad'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-500 font-mono">{formatPakistanDateTime(rep.createdAt)}</span>
-                      <button
-                        onClick={() => {
-                          if (window.confirm(`Are you sure you want to delete this report?`)) {
-                            deleteBranchReport(rep.id);
-                          }
-                        }}
-                        className="p-1.5 bg-rose-950/50 hover:bg-rose-900 text-rose-400 rounded-lg border border-rose-800 transition"
-                        title="Delete Report"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 block">Closed At:</span>
+                      <span className="text-xs font-bold text-slate-300 font-mono">{formatPakistanDateTime(shift.closed_at)}</span>
                     </div>
                   </div>
-                  {rep.reportType === 'ShiftClosing' && (
-                    <div className="flex justify-between font-bold text-emerald-400 bg-slate-900 p-2 rounded-xl border border-slate-800">
-                      <span>Shift Revenue: PKR {rep.totalShiftSales?.toLocaleString()}</span>
-                      <span>Orders Count: {rep.totalOrdersCount}</span>
-                      <span>Cancelled Count: {rep.cancelledOrdersCount || 0}</span>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                      <span className="text-[10px] text-slate-500 font-bold block uppercase">Gross Revenue</span>
+                      <span className="text-lg font-black text-amber-400">PKR {Number(shift.total_gross_revenue || 0).toLocaleString()}</span>
                     </div>
-                  )}
-                  <p className="text-slate-300">{rep.content}</p>
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                      <span className="text-[10px] text-slate-500 font-bold block uppercase">Cash / Card Revenue</span>
+                      <div className="text-sm font-black text-emerald-400">C: {Number(shift.cash_revenue || 0).toLocaleString()}</div>
+                      <div className="text-xs font-bold text-blue-400">B: {Number(shift.card_revenue || 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                      <span className="text-[10px] text-slate-500 font-bold block uppercase">Orders Count</span>
+                      <span className="text-lg font-black text-slate-200">{shift.total_orders_count || 0}</span>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                      <span className="text-[10px] text-slate-500 font-bold block uppercase">Manager Name</span>
+                      <span className="text-sm font-black text-slate-300">{shift.manager_name}</span>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
+          )}
         </div>
       )}
 

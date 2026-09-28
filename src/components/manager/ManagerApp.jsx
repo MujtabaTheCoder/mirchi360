@@ -30,6 +30,7 @@ export const ManagerApp = () => {
     resolveComplaint, 
     resolveWaiterCall, 
     resolveHelpCall, 
+    closeShift,
     menuItems, 
     toggleItemStock, 
     getEffectiveBranchId,
@@ -121,9 +122,16 @@ export const ManagerApp = () => {
     alert("Branch Shift Incident Report logged!");
   };
 
-  const handleShiftClosingSubmit = (e) => {
+  const handleShiftClosingSubmit = async (e) => {
     e.preventDefault();
     const cleanNotes = sanitizeTextInput(reportContent, 1000);
+    
+    const success = await closeShift();
+    if (!success) {
+      alert("Failed to close shift in database. Check console logs.");
+      return;
+    }
+
     addBranchReport({
       shiftName: currentShiftInfo.shiftName,
       shiftType: currentShiftInfo.shiftType,
@@ -135,7 +143,7 @@ export const ManagerApp = () => {
     });
     setReportContent("");
     setIsShiftClosingModalOpen(false);
-    alert(`Shift Handover & Closing Report for ${currentShiftInfo.shiftName} generated!`);
+    alert(`Shift Handover & Closing Report for ${currentShiftInfo.shiftName} generated! Active orders have been archived.`);
   };
 
   return (

@@ -214,3 +214,85 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment TEXT DEFAULT 'Unpaid'
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_name TEXT DEFAULT '';
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_phone TEXT DEFAULT '';
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
+
+-- 16. SHIFT CLOSINGS (Z-Reports)
+CREATE TABLE IF NOT EXISTS public.shift_closings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    restaurant_id UUID REFERENCES public.restaurants(id) ON DELETE CASCADE,
+    branch_id UUID REFERENCES public.branches(id) ON DELETE CASCADE,
+    shift_type TEXT NOT NULL,
+    opened_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    closed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    manager_name TEXT NOT NULL,
+    total_orders_count INT DEFAULT 0,
+    total_gross_revenue NUMERIC(10, 2) DEFAULT 0,
+    cash_revenue NUMERIC(10, 2) DEFAULT 0,
+    card_revenue NUMERIC(10, 2) DEFAULT 0,
+    other_revenue NUMERIC(10, 2) DEFAULT 0,
+    total_discounts NUMERIC(10, 2) DEFAULT 0,
+    cancelled_orders_count INT DEFAULT 0,
+    closed_order_ids JSONB DEFAULT '[]'::jsonb,
+    date DATE NOT NULL DEFAULT CURRENT_DATE
+);
+
+CREATE INDEX IF NOT EXISTS idx_shift_closings_branch_date ON public.shift_closings(branch_id, date);
+ALTER PUBLICATION supabase_realtime ADD TABLE public.shift_closings;
+
+-- RPC for safely closing a shift
+CREATE OR REPLACE FUNCTION public.close_shift(
+  p_branch_id UUID,
+  p_restaurant_id UUID,
+  p_shift_type TEXT,
+  p_manager_name TEXT,
+  p_opened_at TIMESTAMP WITH TIME ZONE,
+  p_date DATE
+) RETURNS UUID AS $$
+DECLARE
+  v_shift_id UUID;
+  v_total_orders INT;
+  v_total_revenue NUMERIC(10,2);
+  v_cash NUMERIC(10,2);
+  v_card NUMERIC(10,2);
+  v_other NUMERIC(10,2);
+  v_cancelled INT;
+  v_order_ids JSONB;
+BEGIN
+  -- 1. Aggregate stats
+  SELECT 
+    COUNT(id),
+    COALESCE(SUM(total_amount), 0),
+    COALESCE(SUM(CASE WHEN payment = 'Cash' THEN total_amount ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN payment = 'Card' THEN total_amount ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN payment != 'Cash' AND payment != 'Card' THEN total_amount ELSE 0 END), 0),
+    COUNT(CASE WHEN status = 'cancelled' THEN 1 END),
+    COALESCE(jsonb_agg(id), '[]'::jsonb)
+  INTO 
+    v_total_orders, v_total_revenue, v_cash, v_card, v_other, v_cancelled, v_order_ids
+  FROM public.orders
+  WHERE branch_id = p_branch_id AND is_archived = FALSE;
+
+  -- 2. Insert shift closing record
+  INSERT INTO public.shift_closings (
+    restaurant_id, branch_id, shift_type, opened_at, manager_name, 
+    total_orders_count, total_gross_revenue, cash_revenue, card_revenue, other_revenue, 
+    cancelled_orders_count, closed_order_ids, date
+  ) VALUES (
+    p_restaurant_id, p_branch_id, p_shift_type, p_opened_at, p_manager_name,
+    v_total_orders, v_total_revenue, v_cash, v_card, v_other,
+    v_cancelled, v_order_ids, p_date
+  ) RETURNING id INTO v_shift_id;
+
+  -- 3. Archive orders
+  UPDATE public.orders 
+  SET is_archived = TRUE
+  WHERE branch_id = p_branch_id AND is_archived = FALSE;
+  
+  -- Also archive complaints and calls if needed
+  UPDATE public.complaints SET status = 'resolved' WHERE branch_id = p_branch_id AND status = 'open';
+  UPDATE public.waiter_calls SET status = 'attended' WHERE branch_id = p_branch_id AND status = 'pending';
+  UPDATE public.help_calls SET status = 'resolved' WHERE branch_id = p_branch_id AND status = 'active';
+
+  RETURN v_shift_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

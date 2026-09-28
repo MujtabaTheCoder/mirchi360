@@ -463,6 +463,15 @@ export const AppProvider = ({ children }) => {
     }
   });
 
+  const [shiftClosings, setShiftClosings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('mirchi_shift_closings');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   useEffect(() => { localStorage.setItem('mirchi_menu_items', JSON.stringify(menuItems)); }, [menuItems]);
   useEffect(() => { localStorage.setItem('mirchi_orders', JSON.stringify(orders)); }, [orders]);
   useEffect(() => { localStorage.setItem('mirchi_complaints', JSON.stringify(complaints)); }, [complaints]);
@@ -584,14 +593,16 @@ export const AppProvider = ({ children }) => {
         { data: waiterCallsData },
         { data: helpCallsData },
         { data: reportsData },
-        { data: auditData }
+        { data: auditData },
+        { data: shiftClosingsData }
       ] = await Promise.all([
-        supabase.from('orders').select('id, order_number, restaurant_id, branch_id, table_id, table_number, status, payment, estimated_minutes, total_amount, notes, customer_name, customer_phone, shift_type, shift_id, created_at, order_items(id, item_name, variant_name, unit_price, quantity, subtotal, special_notes)').order('created_at', { ascending: false }),
-        supabase.from('complaints').select('id, restaurant_id, branch_id, table_number, message, status, shift_type, shift_id, created_at').order('created_at', { ascending: false }),
-        supabase.from('waiter_calls').select('id, restaurant_id, branch_id, table_number, request_type, status, shift_type, shift_id, created_at').order('created_at', { ascending: false }),
-        supabase.from('help_calls').select('id, restaurant_id, branch_id, station_name, message, status, shift_type, shift_id, created_at').order('created_at', { ascending: false }),
+        supabase.from('orders').select('id, order_number, restaurant_id, branch_id, table_id, table_number, status, payment, estimated_minutes, total_amount, notes, customer_name, customer_phone, shift_type, shift_id, created_at, is_archived, order_items(id, item_name, variant_name, unit_price, quantity, subtotal, special_notes)').eq('is_archived', false).order('created_at', { ascending: false }),
+        supabase.from('complaints').select('id, restaurant_id, branch_id, table_number, message, status, shift_type, shift_id, created_at').eq('status', 'open').order('created_at', { ascending: false }),
+        supabase.from('waiter_calls').select('id, restaurant_id, branch_id, table_number, request_type, status, shift_type, shift_id, created_at').eq('status', 'pending').order('created_at', { ascending: false }),
+        supabase.from('help_calls').select('id, restaurant_id, branch_id, station_name, message, status, shift_type, shift_id, created_at').eq('status', 'active').order('created_at', { ascending: false }),
         supabase.from('branch_reports').select('id, branch_id, manager_name, shift_name, shift_type, shift_id, report_type, total_shift_sales, total_orders_count, cancelled_orders_count, content, created_at').order('created_at', { ascending: false }),
-        supabase.from('order_audit_logs').select('id, order_id, branch_id, performed_by, role, action_type, details, shift_type, shift_id, created_at').order('created_at', { ascending: false })
+        supabase.from('order_audit_logs').select('id, order_id, branch_id, performed_by, role, action_type, details, shift_type, shift_id, created_at').order('created_at', { ascending: false }),
+        supabase.from('shift_closings').select('id, restaurant_id, branch_id, shift_type, opened_at, closed_at, manager_name, total_orders_count, total_gross_revenue, cash_revenue, card_revenue, other_revenue, total_discounts, cancelled_orders_count, closed_order_ids, date').order('closed_at', { ascending: false })
       ]);
 
       if (ordersErr) {
@@ -742,6 +753,17 @@ export const AppProvider = ({ children }) => {
           return merged;
         });
       }
+      
+      if (shiftClosingsData && shiftClosingsData.length > 0) {
+        setShiftClosings(prev => {
+          const map = new Map(prev.map(s => [s.id, s]));
+          shiftClosingsData.forEach(s => map.set(s.id, s));
+          const merged = Array.from(map.values()).sort((a,b) => new Date(b.closed_at).getTime() - new Date(a.closed_at).getTime());
+          try { localStorage.setItem('mirchi_shift_closings', JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      }
+
     } catch (err) {
       console.error("Error loading Supabase data:", err);
     } finally {
@@ -1688,6 +1710,38 @@ export const AppProvider = ({ children }) => {
     broadcastSync('SYNC_COUNTER', 0);
   };
 
+  const closeShift = async () => {
+    if (!currentSession || (currentSession.role !== 'admin' && currentSession.role !== 'manager')) {
+      console.warn("Unauthorized: Only Manager/Admin can close shift");
+      return;
+    }
+    const branchForReport = (currentSession?.role !== 'admin') ? (currentSession?.branchId || selectedBranch.id) : selectedBranch.id;
+    const branchUuid = getBranchUuid(branchForReport);
+    const currentShift = getCurrentShift();
+    
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.rpc('close_shift', {
+        p_branch_id: branchUuid,
+        p_restaurant_id: RESTAURANT_ID,
+        p_shift_type: currentShift.shiftType,
+        p_manager_name: currentSession?.name || "Manager",
+        p_opened_at: new Date().toISOString(),
+        p_date: new Date().toISOString().split('T')[0]
+      });
+      if (error) {
+         console.error("Error closing shift:", error);
+         return false;
+      }
+    }
+    
+    // Optimistic UI update
+    setOrders(orders.filter(o => o.branchId !== branchForReport && o.branch_id !== branchUuid));
+    setComplaints(complaints.filter(c => c.branchId !== branchForReport && c.branch_id !== branchUuid));
+    setWaiterCalls(waiterCalls.filter(c => c.branchId !== branchForReport && c.branch_id !== branchUuid));
+    setHelpCalls(helpCalls.filter(c => c.branchId !== branchForReport && c.branch_id !== branchUuid));
+    return true;
+  };
+
   const getEffectiveBranchId = () => {
     if (!currentSession) return selectedBranch.id;
     if (currentSession.role === 'admin') return selectedBranch.id;
@@ -1715,6 +1769,7 @@ export const AppProvider = ({ children }) => {
     helpCalls,
     branchReports,
     auditLogs,
+    shiftClosings,
     createOrder,
     clearCustomerOrders,
     clearAllOrders,
@@ -1732,6 +1787,7 @@ export const AppProvider = ({ children }) => {
     resolveComplaint,
     resolveWaiterCall,
     resolveHelpCall,
+    closeShift,
     getEffectiveBranchId,
     refreshOrders: loadSupabaseData,
     loadSupabaseData,
@@ -1752,6 +1808,7 @@ export const AppProvider = ({ children }) => {
     helpCalls,
     branchReports,
     auditLogs,
+    shiftClosings,
     loadSupabaseData
   ]);
 
