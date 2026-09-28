@@ -82,10 +82,6 @@ export const CustomerApp = () => {
     o.status !== 'cancelled' && 
     o.payment !== 'Paid'
   );
-  const pastTableOrders = allTableOrders.filter(o => 
-    o && 
-    (o.status === 'completed' || o.status === 'cancelled' || o.payment === 'Paid')
-  );
 
   // Add Item to Cart
   const handleAddToCart = (item, variant = null) => {
@@ -409,17 +405,6 @@ export const CustomerApp = () => {
                 <ChefHat className="w-4 h-4 text-rose-500" />
                 <span>Active Orders (Table {selectedTableNumber})</span>
               </h2>
-
-              {pastTableOrders.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowPastHistory(prev => !prev)}
-                  className="text-xs font-bold text-slate-400 hover:text-amber-400 flex items-center space-x-1 transition bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-800"
-                >
-                  <History className="w-3.5 h-3.5" />
-                  <span>{showPastHistory ? 'Hide Past' : `View Past (${pastTableOrders.length})`}</span>
-                </button>
-              )}
             </div>
 
             {/* If no active orders currently running */}
@@ -570,30 +555,7 @@ export const CustomerApp = () => {
               })
             )}
 
-            {/* PAST COMPLETED ORDERS SECTION (Collapsible) */}
-            {showPastHistory && pastTableOrders.length > 0 && (
-              <div className="pt-4 border-t border-slate-800 space-y-3">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Completed / Past Orders</h3>
-                {pastTableOrders.map((order) => (
-                  <div key={order.id} className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 space-y-2 opacity-75">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-300">Order #{order.orderNumber}</span>
-                      <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full text-[10px] uppercase font-bold">
-                        {order.status}
-                      </span>
-                    </div>
-                    <div className="text-xs text-slate-400 space-y-1">
-                      {order.items?.map((i, idx) => (
-                        <div key={idx} className="flex justify-between">
-                          <span>{i.quantity}x {i.name}</span>
-                          <span>PKR {i.subtotal}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+
           </div>
         )}
         </ErrorBoundary>
