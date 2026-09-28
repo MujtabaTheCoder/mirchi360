@@ -1,25 +1,29 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
 import {
   Flame, ShoppingBag, Bell, AlertCircle, Check, Plus, Minus, X,
   Clock, Sparkles, ChefHat, MessageSquare, ChevronRight, CheckCircle, Search, Utensils, History,
-  User, Phone
+  User, Phone, Globe
 } from 'lucide-react';
 import { useApp, formatPakistanTime } from '../../lib/store';
 import { CustomerIdentityModal } from './CustomerIdentityModal';
 import { ErrorBoundary } from '../shared/ErrorBoundary';
 import { sanitizeTextInput } from '../../lib/security';
+import { useMenuItems } from '../../hooks/useMenuItems';
 
 export const CustomerApp = () => {
+  const { t, i18n } = useTranslation();
   const {
     selectedBranch,
     selectedTableNumber,
-    menuItems,
     createOrder,
     orders,
     submitComplaint,
     callWaiter
   } = useApp();
+
+  const { data: menuItems, isLoading: isMenuLoading } = useMenuItems();
 
   const [activeCategory, setActiveCategory] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -249,28 +253,35 @@ export const CustomerApp = () => {
             </div>
           </div>
 
-          {/* Call Waiter & Complaint Quick Actions */}
+          {/* Language Switcher & Quick Actions */}
           <div className="flex items-center space-x-1.5 sm:space-x-2">
+            <button
+              onClick={() => i18n.changeLanguage(i18n.language === 'ur' ? 'en' : 'ur')}
+              className="p-2 bg-slate-800/50 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
+            >
+              <Globe className="w-4 h-4 text-blue-400" />
+              <span className="hidden sm:inline font-bold uppercase">{i18n.language === 'ur' ? 'EN' : 'UR'}</span>
+            </button>
             <a
               href="/staff"
               className="p-2 bg-slate-800/50 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
             >
               <ChefHat className="w-4 h-4" />
-              <span className="hidden sm:inline font-bold">Staff</span>
+              <span className="hidden sm:inline font-bold">{t('Staff', 'Staff')}</span>
             </a>
             <button
               onClick={handleCallWaiterClick}
               className="p-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
             >
               <Bell className="w-4 h-4 animate-bounce" />
-              <span className="hidden sm:inline font-bold">Call Waiter</span>
+              <span className="hidden sm:inline font-bold">{t('Call Waiter', 'Call Waiter')}</span>
             </button>
             <button
               onClick={() => setIsComplaintModalOpen(true)}
               className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
             >
               <MessageSquare className="w-4 h-4" />
-              <span className="hidden sm:inline font-bold">Complain</span>
+              <span className="hidden sm:inline font-bold">{t('Complain', 'Complain')}</span>
             </button>
           </div>
         </div>
@@ -282,14 +293,14 @@ export const CustomerApp = () => {
             className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${activeTab === "menu" ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
           >
-            Digital Menu
+            {t('Digital Menu', 'Digital Menu')}
           </button>
           <button
             onClick={() => setActiveTab("tracking")}
             className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition relative ${activeTab === "tracking" ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
           >
-            Active Orders ({activeTableOrders.length})
+            {t('Active Orders', 'Active Orders')} ({activeTableOrders.length})
             {activeTableOrders.some(o => o.status === 'ready' || o.status === 'preparing') && (
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping" />
             )}
