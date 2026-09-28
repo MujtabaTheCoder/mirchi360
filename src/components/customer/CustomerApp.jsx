@@ -255,13 +255,7 @@ export const CustomerApp = () => {
 
           {/* Language Switcher & Quick Actions */}
           <div className="flex items-center space-x-1.5 sm:space-x-2">
-            <button
-              onClick={() => i18n.changeLanguage(i18n.language === 'ur' ? 'en' : 'ur')}
-              className="p-2 bg-slate-800/50 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
-            >
-              <Globe className="w-4 h-4 text-blue-400" />
-              <span className="hidden sm:inline font-bold uppercase">{i18n.language === 'ur' ? 'EN' : 'UR'}</span>
-            </button>
+
             <a
               href="/staff"
               className="p-2 bg-slate-800/50 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
