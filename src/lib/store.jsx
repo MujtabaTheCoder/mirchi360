@@ -378,18 +378,10 @@ export const AppProvider = ({ children }) => {
   });
 
   const [orderCounter, setOrderCounter] = useState(() => {
-    try {
-      const savedOrders = localStorage.getItem('mirchi_orders');
-      if (savedOrders) {
-        const parsed = JSON.parse(savedOrders).filter(o => o && !String(o.id).includes('seed') && o.notes !== '[PURGED_DEMO]');
-        if (parsed.length > 0) {
-          const maxNum = Math.max(...parsed.map(o => Number(o.orderNumber) || 0));
-          return maxNum > 0 ? maxNum : 0;
-        }
-      }
-    } catch {}
+    // Always start from 0 — first real order will be #1
+    // We do NOT read from localStorage here because clearStaleOrdersCache() already wiped it
     try { localStorage.setItem('mirchi_order_counter', '0'); } catch {}
-    return 0; // Starts from 0, so the very first order will be Invoice #1
+    return 0;
   });
 
   const [menuItems, setMenuItems] = useState(() => {
@@ -680,7 +672,10 @@ export const AppProvider = ({ children }) => {
           return mergedOrders;
         });
 
-        const maxNum = Math.max(0, ...mergedOrders.map(o => Number(o.orderNumber || o.order_number) || 0));
+        // If DB has no active orders, reset counter to 0 so next order is Invoice #1
+        const maxNum = mergedOrders.length === 0
+          ? 0
+          : Math.max(0, ...mergedOrders.map(o => Number(o.orderNumber || o.order_number) || 0));
         setOrderCounter(prev => {
           if (prev === maxNum) return prev;
           try { localStorage.setItem('mirchi_order_counter', String(maxNum)); } catch {}
