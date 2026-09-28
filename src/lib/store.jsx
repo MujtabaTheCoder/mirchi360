@@ -596,13 +596,13 @@ export const AppProvider = ({ children }) => {
         { data: auditData },
         { data: shiftClosingsData }
       ] = await Promise.all([
-        supabase.from('orders').select('id, order_number, restaurant_id, branch_id, table_id, table_number, status, payment, estimated_minutes, total_amount, notes, customer_name, customer_phone, shift_type, shift_id, created_at, is_archived, order_items(id, item_name, variant_name, unit_price, quantity, subtotal, special_notes)').eq('is_archived', false).order('created_at', { ascending: false }),
-        supabase.from('complaints').select('id, restaurant_id, branch_id, table_number, message, status, shift_type, shift_id, created_at').eq('status', 'open').order('created_at', { ascending: false }),
-        supabase.from('waiter_calls').select('id, restaurant_id, branch_id, table_number, request_type, status, shift_type, shift_id, created_at').eq('status', 'pending').order('created_at', { ascending: false }),
-        supabase.from('help_calls').select('id, restaurant_id, branch_id, station_name, message, status, shift_type, shift_id, created_at').eq('status', 'active').order('created_at', { ascending: false }),
-        supabase.from('branch_reports').select('id, branch_id, manager_name, shift_name, shift_type, shift_id, report_type, total_shift_sales, total_orders_count, cancelled_orders_count, content, created_at').order('created_at', { ascending: false }),
-        supabase.from('order_audit_logs').select('id, order_id, branch_id, performed_by, role, action_type, details, shift_type, shift_id, created_at').order('created_at', { ascending: false }),
-        supabase.from('shift_closings').select('id, restaurant_id, branch_id, shift_type, opened_at, closed_at, manager_name, total_orders_count, total_gross_revenue, cash_revenue, card_revenue, other_revenue, total_discounts, cancelled_orders_count, closed_order_ids, date').order('closed_at', { ascending: false })
+        supabase.from('orders').select('id, order_number, restaurant_id, branch_id, table_id, table_number, status, estimated_minutes, total_amount, notes, created_at, order_items(id, item_name, variant_name, unit_price, quantity, subtotal, special_notes)').eq('is_archived', false).order('created_at', { ascending: false }),
+        supabase.from('complaints').select('id, restaurant_id, branch_id, table_number, message, status, created_at').eq('status', 'open').order('created_at', { ascending: false }),
+        supabase.from('waiter_calls').select('id, restaurant_id, branch_id, table_number, request_type, status, created_at').eq('status', 'pending').order('created_at', { ascending: false }),
+        supabase.from('help_calls').select('id, restaurant_id, branch_id, station_name, message, status, created_at').eq('status', 'active').order('created_at', { ascending: false }),
+        supabase.from('branch_reports').select('id, branch_id, manager_name, shift_name, report_type, total_shift_sales, total_orders_count, cancelled_orders_count, content, created_at').order('created_at', { ascending: false }),
+        supabase.from('order_audit_logs').select('id, order_id, branch_id, performed_by, role, action_type, details, created_at').order('created_at', { ascending: false }),
+        supabase.from('shift_closings').select('id, restaurant_id, branch_id, opened_at, closed_at, manager_name, total_orders_count, total_gross_revenue, cash_revenue, card_revenue, other_revenue, total_discounts, cancelled_orders_count, closed_order_ids, date').order('closed_at', { ascending: false })
       ]);
 
       if (ordersErr) {
