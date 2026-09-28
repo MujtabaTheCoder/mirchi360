@@ -179,8 +179,8 @@ export const CustomerApp = () => {
     const trimmedName = sanitizeTextInput(customerIdentity.name || "", 80);
     const trimmedPhone = sanitizeTextInput(customerIdentity.phone || "", 30);
 
-    // If customer has never entered identity and never explicitly skipped, offer the friendly modal
-    if (!trimmedName && !trimmedPhone && !customerIdentity.skipped) {
+    // If customer has not entered both identity details, enforce it
+    if (!trimmedName || !trimmedPhone) {
       setIsIdentityModalOpen(true);
       return;
     }

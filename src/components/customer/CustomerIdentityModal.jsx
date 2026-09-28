@@ -21,20 +21,17 @@ export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isO
     const trimmedName = name.trim();
     const digitsOnly = phone.replace(/[^\d+]/g, "");
 
-    if (trimmedName && trimmedName.length < 2) {
-      setError("Please enter a valid name (at least 2 letters) or skip.");
+    if (!trimmedName || trimmedName.length < 2) {
+      setError("Please enter a valid name (at least 2 letters).");
       return;
     }
-    if (digitsOnly && !/^\+?\d{10,15}$/.test(digitsOnly)) {
-      setError("Enter a valid phone number (10–15 digits) or leave blank.");
+    if (!digitsOnly || !/^\+?\d{10,15}$/.test(digitsOnly)) {
+      setError("Please enter a valid phone number (10–15 digits).");
       return;
     }
     onSave({ name: trimmedName, phone: digitsOnly });
   };
 
-  const handleSkip = () => {
-    onSave({ name: "", phone: "" });
-  };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
@@ -48,7 +45,7 @@ export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isO
           </div>
           <div>
             <h2 className="text-base font-extrabold text-white">Welcome to Mirchi 360</h2>
-            <p className="text-xs text-slate-400">Add your contact info for order updates (optional).</p>
+            <p className="text-xs text-slate-400">Please add your contact info to proceed with your order.</p>
           </div>
         </div>
 
@@ -57,7 +54,7 @@ export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isO
         )}
 
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-300">Customer Name (Optional)</label>
+          <label className="text-xs font-semibold text-slate-300">Customer Name</label>
           <div className="relative">
             <User className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
             <input
@@ -72,7 +69,7 @@ export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isO
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-300">Phone Number (Optional)</label>
+          <label className="text-xs font-semibold text-slate-300">Phone Number</label>
           <div className="relative">
             <Phone className="w-4 h-4 text-slate-500 absolute left-3 top-3.5" />
             <input
@@ -98,16 +95,9 @@ export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isO
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 font-semibold text-xs rounded-xl min-h-[40px]"
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 font-semibold text-xs rounded-xl min-h-[40px]"
             >
-              Back to Cart
-            </button>
-            <button
-              type="button"
-              onClick={handleSkip}
-              className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl min-h-[40px]"
-            >
-              Order as Guest
+              Back to Cart (Cancel)
             </button>
           </div>
         </div>
