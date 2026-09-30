@@ -7,7 +7,8 @@ import {
   getBranchUuid, 
   getTableUuid, 
   BRANCH_SLUG_MAP, 
-  BRANCH_UUID_MAP 
+  BRANCH_UUID_MAP,
+  isValidUuid
 } from './supabase';
 import { authenticateStaff } from './staffCredentials';
 import { 
@@ -602,16 +603,36 @@ export const AppProvider = ({ children }) => {
         { data: waiterCallsData },
         { data: helpCallsData },
         { data: reportsData },
-        { data: auditData },
-        { data: shiftClosingsData }
+        { data: auditData }
       ] = await Promise.all([
-        supabase.from('orders').select('id, order_number, restaurant_id, branch_id, table_id, table_number, status, estimated_minutes, total_amount, notes, created_at, order_items(id, item_name, variant_name, unit_price, quantity, subtotal, special_notes)').neq('status', 'cancelled').order('created_at', { ascending: false }),
-        supabase.from('complaints').select('id, restaurant_id, branch_id, table_number, message, status, created_at').eq('status', 'open').order('created_at', { ascending: false }),
-        supabase.from('waiter_calls').select('id, restaurant_id, branch_id, table_number, request_type, status, created_at').eq('status', 'pending').order('created_at', { ascending: false }),
-        supabase.from('help_calls').select('id, restaurant_id, branch_id, station_name, message, status, created_at').eq('status', 'active').order('created_at', { ascending: false }),
-        supabase.from('branch_reports').select('id, branch_id, manager_name, shift_name, report_type, total_shift_sales, total_orders_count, cancelled_orders_count, content, created_at').order('created_at', { ascending: false }),
-        supabase.from('order_audit_logs').select('id, order_id, branch_id, performed_by, role, action_type, details, created_at').order('created_at', { ascending: false }),
-        supabase.from('shift_closings').select('id, restaurant_id, branch_id, opened_at, closed_at, manager_name, total_orders_count, total_gross_revenue, cash_revenue, card_revenue, other_revenue, total_discounts, cancelled_orders_count, closed_order_ids, date').order('closed_at', { ascending: false })
+        supabase.from('orders')
+          .select('id, order_number, restaurant_id, branch_id, table_id, table_number, status, estimated_minutes, total_amount, notes, created_at, order_items(id, item_name, variant_name, unit_price, quantity, subtotal, special_notes)')
+          .eq('restaurant_id', RESTAURANT_ID)
+          .neq('status', 'cancelled')
+          .order('created_at', { ascending: false }),
+        supabase.from('complaints')
+          .select('id, restaurant_id, branch_id, table_number, message, status, created_at')
+          .eq('restaurant_id', RESTAURANT_ID)
+          .eq('status', 'open')
+          .order('created_at', { ascending: false }),
+        supabase.from('waiter_calls')
+          .select('id, restaurant_id, branch_id, table_number, request_type, status, created_at')
+          .eq('restaurant_id', RESTAURANT_ID)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false }),
+        supabase.from('help_calls')
+          .select('id, restaurant_id, branch_id, station_name, message, status, created_at')
+          .eq('restaurant_id', RESTAURANT_ID)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false }),
+        supabase.from('branch_reports')
+          .select('id, branch_id, manager_name, shift_name, total_shift_sales, total_orders_count, cancelled_orders_count, content, created_at')
+          .eq('restaurant_id', RESTAURANT_ID)
+          .order('created_at', { ascending: false }),
+        supabase.from('order_audit_logs')
+          .select('id, order_id, branch_id, performed_by, role, action_type, details, created_at')
+          .eq('restaurant_id', RESTAURANT_ID)
+          .order('created_at', { ascending: false })
       ]);
 
       if (ordersErr) {
@@ -773,15 +794,6 @@ export const AppProvider = ({ children }) => {
         });
       }
       
-      if (shiftClosingsData && shiftClosingsData.length > 0) {
-        setShiftClosings(prev => {
-          const map = new Map(prev.map(s => [s.id, s]));
-          shiftClosingsData.forEach(s => map.set(s.id, s));
-          const merged = Array.from(map.values()).sort((a,b) => new Date(b.closed_at).getTime() - new Date(a.closed_at).getTime());
-          try { localStorage.setItem('mirchi_shift_closings', JSON.stringify(merged)); } catch {}
-          return merged;
-        });
-      }
 
     } catch (err) {
       console.error("Error loading Supabase data:", err);
@@ -869,20 +881,20 @@ export const AppProvider = ({ children }) => {
     loadSupabaseData();
     processOfflineQueue();
 
-    let channels = null;
+    let activeChannel = null;
     let reconnectTimer = null;
 
     const setupRealtimeChannel = () => {
       try {
-        if (channels) {
-          supabase.removeChannel(channels);
+        if (activeChannel) {
+          supabase.removeChannel(activeChannel);
+          activeChannel = null;
         }
-        channels = supabase.channel(`mirchi-portal-sync-${Date.now()}`, {
+        activeChannel = supabase.channel('mirchi-portal-sync', {
             config: { broadcast: { self: false }, presence: { key: '' } }
           })
           .on('postgres_changes', {
             event: '*', schema: 'public', table: 'orders',
-            // Listen to all order events — INSERT for new orders, UPDATE for status changes
           }, () => { loadSupabaseData(); })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => { loadSupabaseData(); })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, () => { loadSupabaseData(); })
@@ -914,12 +926,17 @@ export const AppProvider = ({ children }) => {
       setupRealtimeChannel();
     };
 
+    const handleFocus = () => {
+      // On window focus, load fresh data without tearing down and recreating the Realtime channel
+      loadSupabaseData();
+    };
+
     window.addEventListener('online', handleReconnection);
-    window.addEventListener('focus', handleReconnection);
+    window.addEventListener('focus', handleFocus);
     
     const handleVisibility = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        handleReconnection();
+        loadSupabaseData();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
@@ -928,9 +945,12 @@ export const AppProvider = ({ children }) => {
       clearInterval(interval);
       clearTimeout(reconnectTimer);
       window.removeEventListener('online', handleReconnection);
-      window.removeEventListener('focus', handleReconnection);
+      window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
-      if (channels) supabase.removeChannel(channels);
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel);
+        activeChannel = null;
+      }
     };
   }, []);
 
@@ -1317,13 +1337,13 @@ export const AppProvider = ({ children }) => {
       return updated;
     });
 
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && isValidUuid(orderId)) {
       try {
         await supabase.from('orders').update({
           status: newStatus,
           updated_at: new Date().toISOString(),
           ...(estimatedMinutes !== null ? { estimated_minutes: Number(estimatedMinutes) } : {})
-        }).eq('id', orderId);
+        }).eq('id', orderId).eq('restaurant_id', RESTAURANT_ID);
       } catch (err) {
         console.error("Failed to update order status in Supabase:", err);
       }
@@ -1353,12 +1373,12 @@ export const AppProvider = ({ children }) => {
       return updated;
     });
 
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && isValidUuid(orderId)) {
       try {
         await supabase.from('orders').update({
           status: 'served',
           updated_at: new Date().toISOString()
-        }).eq('id', orderId);
+        }).eq('id', orderId).eq('restaurant_id', RESTAURANT_ID);
       } catch (err) {
         console.error("Failed to mark order served in Supabase:", err);
       }
@@ -1388,12 +1408,12 @@ export const AppProvider = ({ children }) => {
       return updated;
     });
 
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && isValidUuid(orderId)) {
       try {
         const { error } = await supabase.from('orders').update({
           status: 'completed',
           updated_at: new Date().toISOString()
-        }).eq('id', orderId);
+        }).eq('id', orderId).eq('restaurant_id', RESTAURANT_ID);
         if (error) {
           console.error("Failed to mark order paid in Supabase:", error);
         }
@@ -1432,6 +1452,9 @@ export const AppProvider = ({ children }) => {
       return updated;
     });
 
+    const branchForLog = currentSession?.branchId || selectedBranch.id;
+    const branchUuid = getBranchUuid(branchForLog);
+
     const auditEntry = {
       id: `aud-${Date.now()}`,
       orderId,
@@ -1446,27 +1469,33 @@ export const AppProvider = ({ children }) => {
     setAuditLogs(prev => [auditEntry, ...prev]);
 
     if (isSupabaseConfigured) {
-      if (actionType === 'CANCEL') {
-        supabase.from('orders').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', orderId).then(() => {});
-      } else if (actionType === 'EDIT') {
-        const updates = { updated_at: new Date().toISOString() };
-        if (modifications.status) updates.status = modifications.status;
-        if (modifications.totalAmount) updates.total_amount = modifications.totalAmount;
-        if (Object.keys(updates).length > 0) {
-          supabase.from('orders').update(updates).eq('id', orderId).then(() => {});
+      if (isValidUuid(orderId)) {
+        if (actionType === 'CANCEL') {
+          supabase.from('orders').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', orderId).eq('restaurant_id', RESTAURANT_ID).then(() => {});
+        } else if (actionType === 'EDIT') {
+          const updates = { updated_at: new Date().toISOString() };
+          if (modifications.status) updates.status = modifications.status;
+          if (modifications.totalAmount) updates.total_amount = modifications.totalAmount;
+          if (Object.keys(updates).length > 0) {
+            supabase.from('orders').update(updates).eq('id', orderId).eq('restaurant_id', RESTAURANT_ID).then(() => {});
+          }
         }
       }
-      supabase.from('order_audit_logs').insert({
-        id: auditEntry.id,
-        order_id: auditEntry.orderId,
+      const auditPayload = {
+        restaurant_id: RESTAURANT_ID,
+        branch_id: branchUuid,
         performed_by: auditEntry.performedBy,
         role: auditEntry.role,
         action_type: actionType,
         details: auditEntry.details,
-        shift_type: auditEntry.shiftType,
-        shift_id: auditEntry.shiftId,
         created_at: auditEntry.createdAt
-      }).then(() => {});
+      };
+      if (isValidUuid(orderId)) {
+        auditPayload.order_id = orderId;
+      }
+      supabase.from('order_audit_logs').insert(auditPayload).then(({ error }) => {
+        if (error) console.error("Error logging order audit:", error);
+      });
     }
 
     return { success: true };
@@ -1498,14 +1527,15 @@ export const AppProvider = ({ children }) => {
 
     if (isSupabaseConfigured) {
       supabase.from('complaints').insert({
-        id: newComplaint.id,
         restaurant_id: RESTAURANT_ID,
         branch_id: branchUuid,
         table_number: Number(newComplaint.tableNumber),
         message: newComplaint.message,
         status: newComplaint.status,
         created_at: newComplaint.createdAt
-      }).then(() => {});
+      }).then(({ error }) => {
+        if (error) console.error("Error inserting complaint into Supabase:", error);
+      });
     }
 
     return newComplaint;
@@ -1535,14 +1565,15 @@ export const AppProvider = ({ children }) => {
 
     if (isSupabaseConfigured) {
       supabase.from('waiter_calls').insert({
-        id: newCall.id,
         restaurant_id: RESTAURANT_ID,
         branch_id: branchUuid,
         table_number: Number(newCall.tableNumber),
         request_type: newCall.requestType,
         status: newCall.status,
         created_at: newCall.createdAt
-      }).then(() => {});
+      }).then(({ error }) => {
+        if (error) console.error("Error inserting waiter call into Supabase:", error);
+      });
     }
 
     return newCall;
@@ -1573,14 +1604,15 @@ export const AppProvider = ({ children }) => {
 
     if (isSupabaseConfigured) {
       supabase.from('help_calls').insert({
-        id: newHelp.id,
         restaurant_id: RESTAURANT_ID,
         branch_id: branchUuid,
         station_name: newHelp.stationName,
         message: newHelp.message,
         status: newHelp.status,
         created_at: newHelp.createdAt
-      }).then(() => {});
+      }).then(({ error }) => {
+        if (error) console.error("Error inserting kitchen help call into Supabase:", error);
+      });
     }
 
     return newHelp;
@@ -1618,10 +1650,12 @@ export const AppProvider = ({ children }) => {
     }
     const currentShift = getCurrentShift();
     const branchForReport = (currentSession?.role !== 'admin') ? (currentSession?.branchId || selectedBranch.id) : selectedBranch.id;
+    const branchUuid = getBranchUuid(branchForReport);
+
     const newReport = {
       id: `rep-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       branchId: branchForReport,
-      branch_id: branchForReport,
+      branch_id: branchUuid,
       managerName: sanitizeTextInput(currentSession?.name || "Manager", 80),
       manager_name: sanitizeTextInput(currentSession?.name || "Manager", 80),
       shiftName: reportData.shiftName || currentShift.shiftName,
@@ -1652,13 +1686,10 @@ export const AppProvider = ({ children }) => {
 
     if (isSupabaseConfigured) {
       supabase.from('branch_reports').insert({
-        id: newReport.id,
-        branch_id: newReport.branchId,
+        restaurant_id: RESTAURANT_ID,
+        branch_id: branchUuid,
         manager_name: newReport.managerName,
         shift_name: newReport.shiftName,
-        shift_type: newReport.shiftType,
-        shift_id: newReport.shiftId,
-        report_type: newReport.reportType,
         total_shift_sales: newReport.totalShiftSales,
         total_orders_count: newReport.totalOrdersCount,
         cancelled_orders_count: newReport.cancelledOrdersCount,
@@ -1675,21 +1706,27 @@ export const AppProvider = ({ children }) => {
     const updated = complaints.map(c => c.id === id ? { ...c, status: 'resolved' } : c);
     setComplaints(updated);
     broadcastSync('SYNC_COMPLAINTS', updated);
-    if (isSupabaseConfigured) supabase.from('complaints').update({ status: 'resolved' }).eq('id', id).then(() => {});
+    if (isSupabaseConfigured && isValidUuid(id)) {
+      supabase.from('complaints').update({ status: 'resolved' }).eq('id', id).eq('restaurant_id', RESTAURANT_ID).then(() => {});
+    }
   };
 
   const resolveWaiterCall = (id) => {
     const updated = waiterCalls.map(w => w.id === id ? { ...w, status: 'attended' } : w);
     setWaiterCalls(updated);
     broadcastSync('SYNC_WAITER_CALLS', updated);
-    if (isSupabaseConfigured) supabase.from('waiter_calls').update({ status: 'attended' }).eq('id', id).then(() => {});
+    if (isSupabaseConfigured && isValidUuid(id)) {
+      supabase.from('waiter_calls').update({ status: 'attended' }).eq('id', id).eq('restaurant_id', RESTAURANT_ID).then(() => {});
+    }
   };
 
   const resolveHelpCall = (id) => {
     const updated = helpCalls.map(h => h.id === id ? { ...h, status: 'resolved' } : h);
     setHelpCalls(updated);
     broadcastSync('SYNC_HELP_CALLS', updated);
-    if (isSupabaseConfigured) supabase.from('help_calls').update({ status: 'resolved' }).eq('id', id).then(() => {});
+    if (isSupabaseConfigured && isValidUuid(id)) {
+      supabase.from('help_calls').update({ status: 'resolved' }).eq('id', id).eq('restaurant_id', RESTAURANT_ID).then(() => {});
+    }
   };
 
   const deleteBranchReport = (id) => {
@@ -1700,7 +1737,9 @@ export const AppProvider = ({ children }) => {
     const updated = branchReports.filter(r => r.id !== id);
     setBranchReports(updated);
     broadcastSync('SYNC_REPORTS', updated);
-    if (isSupabaseConfigured) supabase.from('branch_reports').delete().eq('id', id).then(() => {});
+    if (isSupabaseConfigured && isValidUuid(id)) {
+      supabase.from('branch_reports').delete().eq('id', id).eq('restaurant_id', RESTAURANT_ID).then(() => {});
+    }
   };
 
   const clearAllOrders = () => {
@@ -1727,32 +1766,79 @@ export const AppProvider = ({ children }) => {
   const closeShift = async () => {
     if (!currentSession || (currentSession.role !== 'admin' && currentSession.role !== 'manager')) {
       console.warn("Unauthorized: Only Manager/Admin can close shift");
-      return;
+      return false;
     }
     const branchForReport = (currentSession?.role !== 'admin') ? (currentSession?.branchId || selectedBranch.id) : selectedBranch.id;
     const branchUuid = getBranchUuid(branchForReport);
     const currentShift = getCurrentShift();
     
+    // Calculate shift statistics for this branch
+    const branchOrders = orders.filter(o => (o.branchId === branchForReport || o.branch_id === branchUuid));
+    const activeOrders = branchOrders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
+    const completedOrders = branchOrders.filter(o => o.status === 'completed' || o.payment === 'Paid');
+    const cancelledOrders = branchOrders.filter(o => o.status === 'cancelled');
+    const totalShiftSales = completedOrders.reduce((sum, o) => sum + Number(o.totalAmount || o.total_amount || 0), 0);
+
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.rpc('close_shift', {
-        p_branch_id: branchUuid,
-        p_restaurant_id: RESTAURANT_ID,
-        p_shift_type: currentShift.shiftType,
-        p_manager_name: currentSession?.name || "Manager",
-        p_opened_at: new Date().toISOString(),
-        p_date: new Date().toISOString().split('T')[0]
-      });
-      if (error) {
-         console.error("Error closing shift:", error);
-         return false;
+      try {
+        // Mark all active orders for this branch as completed in Supabase
+        await supabase.from('orders')
+          .update({ status: 'completed', updated_at: new Date().toISOString() })
+          .eq('restaurant_id', RESTAURANT_ID)
+          .eq('branch_id', branchUuid)
+          .neq('status', 'cancelled')
+          .neq('status', 'completed');
+
+        // Resolve open complaints for this branch
+        await supabase.from('complaints')
+          .update({ status: 'resolved' })
+          .eq('restaurant_id', RESTAURANT_ID)
+          .eq('branch_id', branchUuid)
+          .eq('status', 'open');
+
+        // Resolve pending waiter calls for this branch
+        await supabase.from('waiter_calls')
+          .update({ status: 'attended' })
+          .eq('restaurant_id', RESTAURANT_ID)
+          .eq('branch_id', branchUuid)
+          .eq('status', 'pending');
+
+        // Resolve active help calls for this branch
+        await supabase.from('help_calls')
+          .update({ status: 'resolved' })
+          .eq('restaurant_id', RESTAURANT_ID)
+          .eq('branch_id', branchUuid)
+          .eq('status', 'active');
+
+        // Record a shift closing summary in branch_reports
+        const shiftSummaryContent = `Shift Closed: ${currentShift.shiftName}. Completed orders: ${completedOrders.length}, Active orders completed: ${activeOrders.length}, Cancelled orders: ${cancelledOrders.length}. Total Shift Revenue: PKR ${totalShiftSales.toLocaleString()}. Closed by: ${currentSession?.name || 'Manager'}.`;
+
+        await supabase.from('branch_reports').insert({
+          restaurant_id: RESTAURANT_ID,
+          branch_id: branchUuid,
+          manager_name: currentSession?.name || "Manager",
+          shift_name: currentShift.shiftName,
+          total_shift_sales: totalShiftSales,
+          total_orders_count: branchOrders.length,
+          cancelled_orders_count: cancelledOrders.length,
+          content: shiftSummaryContent,
+          created_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error("Error closing shift in Supabase:", err);
       }
     }
     
-    // Optimistic UI update
-    setOrders(orders.filter(o => o.branchId !== branchForReport && o.branch_id !== branchUuid));
-    setComplaints(complaints.filter(c => c.branchId !== branchForReport && c.branch_id !== branchUuid));
-    setWaiterCalls(waiterCalls.filter(c => c.branchId !== branchForReport && c.branch_id !== branchUuid));
-    setHelpCalls(helpCalls.filter(c => c.branchId !== branchForReport && c.branch_id !== branchUuid));
+    // Update local state
+    setOrders(prev => prev.filter(o => o.branchId !== branchForReport && o.branch_id !== branchUuid));
+    setComplaints(prev => prev.filter(c => c.branchId !== branchForReport && c.branch_id !== branchUuid));
+    setWaiterCalls(prev => prev.filter(c => c.branchId !== branchForReport && c.branch_id !== branchUuid));
+    setHelpCalls(prev => prev.filter(c => c.branchId !== branchForReport && c.branch_id !== branchUuid));
+    
+    setTimeout(() => {
+      loadSupabaseData();
+    }, 500);
+
     return true;
   };
 

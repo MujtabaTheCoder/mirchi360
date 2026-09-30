@@ -4,6 +4,7 @@ import {
   TrendingUp, FileText, Lock, MessageSquare, Plus, X, Printer, Calendar, Clock, Receipt, Phone, Trash2, CheckCircle2, CreditCard
 } from 'lucide-react';
 import { useApp, getCurrentShift, formatPakistanTime, formatPakistanDateTime, getPakistanDateString } from '../../lib/store';
+import { getBranchUuid } from '../../lib/supabase';
 import { PrivacyPinModal } from '../shared/PrivacyPinModal';
 import { PrintBillModal } from '../shared/PrintBillModal';
 import { StaffShell } from '../layout/StaffShell';
@@ -40,6 +41,7 @@ export const ManagerApp = () => {
   } = useApp();
 
   const effectiveBranchId = getEffectiveBranchId();
+  const branchUuid = getBranchUuid(effectiveBranchId);
 
   useEffect(() => {
     refreshOrders?.();
@@ -64,9 +66,16 @@ export const ManagerApp = () => {
     actionType: null
   });
 
-  const activeComplaints = complaints.filter(c => c.branchId === effectiveBranchId && c.status === 'open');
-  const activeWaiterCalls = waiterCalls.filter(w => w.branchId === effectiveBranchId && w.status === 'pending');
-  const activeHelpCalls = helpCalls.filter(h => h.branchId === effectiveBranchId && h.status === 'active');
+  const isCurrentBranch = (item) => (
+    item.branchId === effectiveBranchId || 
+    item.branch_id === effectiveBranchId || 
+    item.branchId === branchUuid || 
+    item.branch_id === branchUuid
+  );
+
+  const activeComplaints = complaints.filter(c => isCurrentBranch(c) && c.status === 'open');
+  const activeWaiterCalls = waiterCalls.filter(w => isCurrentBranch(w) && w.status === 'pending');
+  const activeHelpCalls = helpCalls.filter(h => isCurrentBranch(h) && h.status === 'active');
 
   const totalAlertsCount = activeComplaints.length + activeWaiterCalls.length + activeHelpCalls.length;
   const prevAlertsRef = useRef(totalAlertsCount);
@@ -79,7 +88,7 @@ export const ManagerApp = () => {
   }, [totalAlertsCount]);
 
   const branchOrders = orders.filter(o => {
-    const isBranchMatch = o.branchId === effectiveBranchId;
+    const isBranchMatch = isCurrentBranch(o);
     const orderDateStr = getPakistanDateString(o.createdAt);
     const isDateMatch = !selectedDateFilter || orderDateStr === selectedDateFilter;
     const orderShift = o.shiftType || o.shift_type || 'Evening';
@@ -87,7 +96,7 @@ export const ManagerApp = () => {
     return isBranchMatch && isDateMatch && isShiftMatch;
   });
 
-  const reportsList = branchReports.filter(r => r.branchId === effectiveBranchId);
+  const reportsList = branchReports.filter(r => isCurrentBranch(r));
 
   const completedOrders = branchOrders.filter(o => o.status === 'completed' || o.status === 'served' || o.status === 'ready' || o.status === 'preparing');
   const totalSalesRevenue = completedOrders.reduce((sum, o) => sum + (Number(o.totalAmount || o.total_amount) || 0), 0);

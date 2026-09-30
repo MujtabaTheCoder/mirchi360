@@ -4,6 +4,7 @@ import {
   Lock, Slash, Bell, X, Phone
 } from 'lucide-react';
 import { useApp, getCurrentShift, formatPakistanTime } from '../../lib/store';
+import { getBranchUuid } from '../../lib/supabase';
 import { PrintKotModal } from '../shared/PrintKotModal';
 import { PrivacyPinModal } from '../shared/PrivacyPinModal';
 import { StaffShell } from '../layout/StaffShell';
@@ -29,6 +30,7 @@ export const KitchenApp = () => {
   } = useApp();
 
   const effectiveBranchId = getEffectiveBranchId();
+  const branchUuid = getBranchUuid(effectiveBranchId);
 
   const [printingOrder, setPrintingOrder] = useState(null);
 
@@ -44,7 +46,7 @@ export const KitchenApp = () => {
 
   const activeShift = getCurrentShift();
   const kitchenOrders = orders.filter(o => 
-    (o.branchId === effectiveBranchId || o.branch_id === effectiveBranchId) && 
+    (o.branchId === effectiveBranchId || o.branch_id === effectiveBranchId || o.branchId === branchUuid || o.branch_id === branchUuid) && 
     o.status !== 'completed' && 
     o.status !== 'cancelled' &&
     o.status !== 'served'
