@@ -358,39 +358,60 @@ export const CustomerApp = () => {
 
 
 
+  const isAnyModalOpen = Boolean(
+    isCartOpen ||
+    isComplaintModalOpen ||
+    selectedItemForVariant ||
+    isIdentityModalOpen
+  );
+
+  useEffect(() => {
+    if (isAnyModalOpen) {
+      const prevOverflow = document.body.style.overflow;
+      const prevTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+        document.body.style.touchAction = prevTouchAction;
+      };
+    }
+  }, [isAnyModalOpen]);
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-24 relative font-sans overflow-x-hidden">
+    <div className="h-[100dvh] h-screen w-screen max-w-full flex flex-col bg-slate-950 text-slate-100 font-sans overflow-hidden relative select-none">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gradient-to-r from-rose-600 to-amber-600 text-white px-5 py-2.5 rounded-full shadow-2xl text-xs font-bold flex items-center space-x-2 animate-in fade-in slide-in-from-top duration-300">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[70] bg-gradient-to-r from-rose-600 to-amber-600 text-white px-5 py-2.5 rounded-full shadow-2xl text-xs font-bold flex items-center space-x-2 animate-in fade-in slide-in-from-top duration-300 pointer-events-none">
           <Sparkles className="w-4 h-4 text-amber-300 animate-spin" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Top Banner & Header */}
-      <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 shadow-lg">
-        <div className="max-w-xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-600/30">
-              <Flame className="w-6 h-6 text-white" />
+      {/* Top Banner & Header (Fixed & Stationary — stays firmly anchored on screen) */}
+      <header className="flex-shrink-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800/80 shadow-lg">
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-600/30 flex-shrink-0">
+              <Flame className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-base font-extrabold text-white tracking-wide">MIRCHI 360</h1>
-              <div className="flex items-center space-x-2 text-xs text-rose-400 font-semibold">
-                <span className="bg-rose-950/80 border border-rose-800/60 px-2 py-0.5 rounded-full">
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-base font-extrabold text-white tracking-wide truncate">MIRCHI 360</h1>
+              <div className="flex items-center space-x-1.5 sm:space-x-2 text-[11px] sm:text-xs text-rose-400 font-semibold flex-wrap">
+                <span className="bg-rose-950/80 border border-rose-800/60 px-2 py-0.5 rounded-full whitespace-nowrap">
                   {selectedBranch?.name || 'Defence'} Branch
                 </span>
-                <span className="bg-amber-950/80 text-amber-400 border border-amber-800/60 px-2 py-0.5 rounded-full font-bold">
+                <span className="bg-amber-950/80 text-amber-400 border border-amber-800/60 px-2 py-0.5 rounded-full font-bold whitespace-nowrap">
                   TABLE {selectedTableNumber}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Language Switcher & Quick Actions */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2">
+          {/* Quick Actions */}
+          <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">
             <button
+              type="button"
               onClick={() => setIsCartOpen(true)}
               className="relative p-2 bg-gradient-to-r from-rose-600/20 to-amber-500/20 hover:from-rose-600/30 hover:to-amber-500/30 text-rose-400 border border-rose-500/40 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 shadow-sm"
               title="Open Cart"
@@ -406,98 +427,136 @@ export const CustomerApp = () => {
             <a
               href="/staff"
               className="p-2 bg-slate-800/50 hover:bg-slate-800 text-slate-400 border border-slate-700 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
+              title="Staff Portal"
             >
               <ChefHat className="w-4 h-4" />
-              <span className="hidden sm:inline font-bold">{t('Staff', 'Staff')}</span>
+              <span className="hidden md:inline font-bold">{t('Staff', 'Staff')}</span>
             </a>
             <button
+              type="button"
               onClick={handleCallWaiterClick}
               className="p-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
+              title="Call Waiter"
             >
               <Bell className="w-4 h-4 animate-bounce" />
-              <span className="hidden sm:inline font-bold">{t('Call Waiter', 'Call Waiter')}</span>
+              <span className="hidden md:inline font-bold">{t('Call Waiter', 'Call Waiter')}</span>
             </button>
             <button
+              type="button"
               onClick={() => setIsComplaintModalOpen(true)}
               className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold flex items-center space-x-1 transition active:scale-95 shadow-sm"
+              title="Manager Complaint"
             >
               <MessageSquare className="w-4 h-4" />
-              <span className="hidden sm:inline font-bold">{t('Complain', 'Complain')}</span>
+              <span className="hidden md:inline font-bold">{t('Complain', 'Complain')}</span>
             </button>
           </div>
         </div>
 
         {/* View Switcher Tabs (Menu vs Active Orders) */}
-        <div className="max-w-xl mx-auto flex mt-3 bg-slate-950 p-1 rounded-xl border border-slate-800 overflow-x-hidden">
-          <button
-            onClick={() => setActiveTab("menu")}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${activeTab === "menu" ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-              }`}
-          >
-            {t('Digital Menu', 'Digital Menu')}
-          </button>
-          <button
-            onClick={() => setActiveTab("tracking")}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition relative ${activeTab === "tracking" ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-              }`}
-          >
-            {t('Active Orders', 'Active Orders')} ({activeTableOrders.length})
-            {activeTableOrders.some(o => o.status === 'ready' || o.status === 'preparing') && (
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping" />
-            )}
-          </button>
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 pb-2">
+          <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setActiveTab("menu")}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 ${activeTab === "menu" ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+            >
+              <Utensils className="w-3.5 h-3.5" />
+              <span>{t('Digital Menu', 'Digital Menu')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("tracking")}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition relative flex items-center justify-center gap-1.5 ${activeTab === "tracking" ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>{t('Active Orders', 'Active Orders')} ({activeTableOrders.length})</span>
+              {activeTableOrders.some(o => o.status === 'ready' || o.status === 'preparing') && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping" />
+              )}
+            </button>
+          </div>
         </div>
+
+        {/* Search Bar & Category Horizontal Scroll Slider (Fixed at top with header) */}
+        {activeTab === "menu" && (
+          <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 pb-2.5 space-y-2">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search food, steaks, handi, karahi, drinks..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-9 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500 transition shadow-inner"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-2 text-slate-400 hover:text-white p-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Category Horizontal Scroll Slider */}
+            <div className="flex space-x-2 overflow-x-auto pb-1 no-scrollbar touch-pan-x">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setActiveCategory(cat)}
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition border ${activeCategory === cat
+                    ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white border-rose-500 shadow-md shadow-rose-900/40'
+                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </header>
 
-      {/* Main Content Area */}
-      <main className="max-w-xl mx-auto px-4 pt-4">
+      {/* Main Scrollview Area (ONLY items or active orders scroll inside here!) */}
+      <main className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 lg:px-6 py-4 scroll-smooth">
         <ErrorBoundary sectionName="Customer View">
           {activeTab === "menu" ? (
-            <>
-              {/* Search Bar */}
-              <div className="relative mb-4">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                <input
-                  type="text"
-                  placeholder="Search food, steaks, handi, karahi, drinks..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-9 pr-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-rose-500 transition shadow-inner"
-                />
-              </div>
-
-              {/* Category Horizontal Scroll Slider */}
-              <div className="flex space-x-2 overflow-x-auto pb-3 mb-4 no-scrollbar touch-pan-x">
-                {categories.map((cat) => (
+            <div className="w-full max-w-7xl mx-auto">
+              {filteredItems.length === 0 ? (
+                <div className="text-center py-16 text-slate-400 space-y-3 bg-slate-900/50 border border-slate-800/60 rounded-3xl p-8 max-w-md mx-auto">
+                  <Utensils className="w-10 h-10 mx-auto text-slate-600" />
+                  <p className="text-sm font-semibold text-slate-300">No items match your search or filter</p>
                   <button
-                    key={cat}
-                    onClick={() => setActiveCategory(cat)}
-                    className={`px-3.5 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition border ${activeCategory === cat
-                      ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white border-rose-500 shadow-md shadow-rose-900/40'
-                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
-                      }`}
+                    type="button"
+                    onClick={() => { setSearchQuery(""); setActiveCategory("ALL"); }}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 text-xs font-bold rounded-xl transition"
                   >
-                    {cat}
+                    Clear Search & Filter
                   </button>
-                ))}
-              </div>
-
-              {/* Menu Items Grid — uses memoized MenuItemCard to prevent full re-renders */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {filteredItems.map((item) => (
-                  <MenuItemCard 
-                    key={item.id} 
-                    item={item} 
-                    onAdd={handleAddToCart}
-                    cartQuantity={cartItemCounts[item.id] || 0}
-                    onUpdateQuantity={updateCartQuantity}
-                  />
-                ))}
-              </div>
-            </>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 sm:gap-4 pb-28">
+                  {filteredItems.map((item) => (
+                    <MenuItemCard 
+                      key={item.id} 
+                      item={item} 
+                      onAdd={handleAddToCart}
+                      cartQuantity={cartItemCounts[item.id] || 0}
+                      onUpdateQuantity={updateCartQuantity}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           ) : (
-            /* Live Order Tracking View (Focusing on ACTIVE ORDERS) */
-            <div className="space-y-4">
+            /* Live Order Tracking View (Inside the same scroll container) */
+            <div className="w-full max-w-3xl mx-auto space-y-4 pb-28">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <h2 className="text-sm font-extrabold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
                   <ChefHat className="w-4 h-4 text-rose-500" />
@@ -516,6 +575,7 @@ export const CustomerApp = () => {
                     All previous orders have been completed and bill paid. Ready for your next delicious meal?
                   </p>
                   <button
+                    type="button"
                     onClick={() => setActiveTab("menu")}
                     className="px-6 py-2.5 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-xs rounded-2xl shadow-lg transition active:scale-95 inline-flex items-center space-x-2"
                   >
@@ -543,7 +603,7 @@ export const CustomerApp = () => {
                             Placed at {formatPakistanTime(order.createdAt)}
                           </div>
                         </div>
-                        {/* Status Badge — memoized, only re-renders on status change */}
+                        {/* Status Badge */}
                         <OrderStatusBadge status={order.status} />
                       </div>
 
@@ -570,7 +630,7 @@ export const CustomerApp = () => {
                           <span>Order received by kitchen. Chef will set estimated preparation time shortly...</span>
                         </div>
                       ) : order.status === 'ready' ? (
-                        /* 3. If ready: TIMER REMOVED! Show Order Ready Banner */
+                        /* 3. If ready: Show Order Ready Banner */
                         <div className="bg-gradient-to-r from-emerald-950/90 via-slate-900 to-teal-950 border border-emerald-500/50 p-3.5 rounded-2xl flex items-center justify-between shadow-lg">
                           <div className="flex items-center space-x-2.5 text-emerald-300">
                             <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
@@ -586,7 +646,7 @@ export const CustomerApp = () => {
                           </span>
                         </div>
                       ) : order.status === 'served' ? (
-                        /* 4. If served: TIMER REMOVED! Show Served Banner & PROMINENT BILL UNPAID OPTION */
+                        /* 4. If served: Show Served Banner & PROMINENT BILL UNPAID OPTION */
                         <div className="bg-gradient-to-r from-purple-950/90 via-slate-900 to-amber-950/80 border border-purple-500/40 p-3.5 rounded-2xl space-y-2 shadow-lg">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2.5 text-purple-300">
@@ -639,20 +699,19 @@ export const CustomerApp = () => {
                   );
                 })
               )}
-
-
             </div>
           )}
         </ErrorBoundary>
       </main>
 
-      {/* Floating Cart Button — GPU composite layer */}
+      {/* Floating Cart Button (Elevated and Responsive) */}
       {cart.length > 0 && activeTab === "menu" && (
-        <div className="cart-float fixed bottom-4 left-0 right-0 z-40 px-4">
-          <div className="max-w-xl mx-auto">
+        <div className="fixed bottom-4 left-0 right-0 z-40 px-3 sm:px-4 pointer-events-none">
+          <div className="max-w-xl sm:max-w-2xl lg:max-w-4xl mx-auto pointer-events-auto">
             <button
+              type="button"
               onClick={() => setIsCartOpen(true)}
-              className="gpu-accelerate w-full bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold p-3.5 rounded-2xl shadow-2xl shadow-rose-950/80 flex items-center justify-between transition transform active:scale-98 border border-rose-400/30"
+              className="w-full bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold p-3.5 rounded-2xl shadow-2xl shadow-rose-950/80 flex items-center justify-between transition transform active:scale-98 border border-rose-400/30"
             >
               <div className="flex items-center space-x-3">
                 <div className="bg-white/20 px-2.5 py-1 rounded-xl text-xs font-black">
@@ -669,21 +728,31 @@ export const CustomerApp = () => {
         </div>
       )}
 
-      {/* Cart Modal — GPU composite layer pre-allocated for smooth slide-in */}
+      {/* Cart Modal — Center in front of screen, lock background scroll */}
       {isCartOpen && (
-        <div className="modal-layer fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-0 sm:p-4">
-          <div className="gpu-accelerate bg-slate-900 border border-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in slide-in-from-bottom duration-200">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+        <div 
+          onClick={() => setIsCartOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-200"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-800 w-full max-w-lg sm:max-w-xl rounded-3xl max-h-[90vh] sm:max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 relative"
+          >
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950 flex-shrink-0">
               <div className="flex items-center space-x-2">
                 <ShoppingBag className="w-5 h-5 text-rose-500" />
                 <h3 className="font-bold text-slate-100 text-sm">Draft Cart (Table {selectedTableNumber})</h3>
               </div>
-              <button onClick={() => setIsCartOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg">
+              <button 
+                type="button"
+                onClick={() => setIsCartOpen(false)} 
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 overflow-y-auto flex-1 space-y-3">
+            <div className="p-4 overflow-y-auto overscroll-contain flex-1 space-y-3">
               {cart.map((item) => (
                 <div key={item.cartKey} className="bg-slate-950 border border-slate-800 p-3 rounded-2xl space-y-2">
                   <div className="flex justify-between items-start">
@@ -697,6 +766,7 @@ export const CustomerApp = () => {
 
                     <div className="flex items-center space-x-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
                       <button
+                        type="button"
                         onClick={() => updateCartQuantity(item.cartKey, -1)}
                         className="p-1 text-slate-400 hover:text-white bg-slate-800 rounded-lg"
                       >
@@ -704,6 +774,7 @@ export const CustomerApp = () => {
                       </button>
                       <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
                       <button
+                        type="button"
                         onClick={() => updateCartQuantity(item.cartKey, 1)}
                         className="p-1 text-white bg-rose-600 hover:bg-rose-500 rounded-lg"
                       >
@@ -767,7 +838,7 @@ export const CustomerApp = () => {
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-800 bg-slate-950 space-y-3">
+            <div className="p-4 border-t border-slate-800 bg-slate-950 flex-shrink-0 space-y-3">
               <div className="flex justify-between items-center text-sm font-extrabold">
                 <span className="text-slate-300">Total Payable:</span>
                 <span className="text-rose-400 text-lg">PKR {cartTotal}</span>
@@ -776,7 +847,7 @@ export const CustomerApp = () => {
                 type="button"
                 disabled={isSubmittingOrder || cart.length === 0}
                 onClick={handlePlaceOrder}
-                className="w-full py-3.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-extrabold rounded-2xl shadow-lg transition text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-extrabold rounded-2xl shadow-lg transition text-sm flex items-center justify-center gap-2 disabled:opacity-50 min-h-[44px]"
               >
                 {isSubmittingOrder ? (
                   <>
@@ -792,15 +863,37 @@ export const CustomerApp = () => {
         </div>
       )}
 
-      {/* Variant Selection Modal */}
+      {/* Variant Selection Modal — Center in front of screen */}
       {selectedItemForVariant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
-            <div>
-              <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">{selectedItemForVariant.categoryName || selectedItemForVariant.category_name}</span>
-              <h3 className="font-bold text-sm text-slate-100">Select Size/Portion for {selectedItemForVariant.name}</h3>
+        <div 
+          onClick={() => {
+            setSelectedItemForVariant(null);
+            setSelectedVariant(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-150"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm sm:max-w-md max-h-[85vh] flex flex-col overflow-hidden p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150 relative"
+          >
+            <div className="flex-shrink-0 flex items-start justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">{selectedItemForVariant.categoryName || selectedItemForVariant.category_name}</span>
+                <h3 className="font-bold text-sm text-slate-100">Select Size/Portion for {selectedItemForVariant.name}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedItemForVariant(null);
+                  setSelectedVariant(null);
+                }}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+
+            <div className="space-y-2 max-h-60 overflow-y-auto overscroll-contain pr-1 flex-1">
               {(selectedItemForVariant.variants || []).map((v) => (
                 <button
                   key={v.name}
@@ -821,14 +914,15 @@ export const CustomerApp = () => {
                 </button>
               ))}
             </div>
-            <div className="flex space-x-2 pt-2">
+
+            <div className="flex space-x-2 pt-2 flex-shrink-0">
               <button
                 type="button"
                 onClick={() => {
                   setSelectedItemForVariant(null);
                   setSelectedVariant(null);
                 }}
-                className="flex-1 py-2.5 text-xs text-slate-400 bg-slate-800 hover:bg-slate-700 rounded-xl transition"
+                className="flex-1 py-2.5 text-xs text-slate-400 bg-slate-800 hover:bg-slate-700 rounded-xl transition font-semibold"
               >
                 Cancel
               </button>
@@ -847,17 +941,27 @@ export const CustomerApp = () => {
         </div>
       )}
 
-      {/* Complaint Modal */}
+      {/* Complaint Modal — Center in front of screen */}
       {isComplaintModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-5 space-y-3">
+        <div 
+          onClick={() => setIsComplaintModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-150"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm sm:max-w-md p-5 space-y-3 shadow-2xl animate-in zoom-in-95 duration-150 relative"
+          >
             <div className="flex justify-between items-center">
               <h3 className="font-bold text-sm text-rose-400 flex items-center space-x-1.5">
                 <AlertCircle className="w-4 h-4" />
                 <span>Submit Complaint (Table {selectedTableNumber})</span>
               </h3>
-              <button onClick={() => setIsComplaintModalOpen(false)} className="text-slate-400">
-                <X className="w-4 h-4" />
+              <button 
+                type="button"
+                onClick={() => setIsComplaintModalOpen(false)} 
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
             <p className="text-xs text-slate-400">This message will immediately alert the Branch Manager on duty.</p>
@@ -870,14 +974,16 @@ export const CustomerApp = () => {
             />
             <div className="flex space-x-2 pt-1">
               <button
+                type="button"
                 onClick={() => setIsComplaintModalOpen(false)}
-                className="flex-1 py-2 text-xs text-slate-400 bg-slate-800 rounded-xl"
+                className="flex-1 py-2.5 text-xs text-slate-400 bg-slate-800 hover:bg-slate-700 rounded-xl transition font-semibold"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleComplaintSubmit}
-                className="flex-1 py-2 text-xs font-bold text-white bg-rose-600 rounded-xl shadow"
+                className="flex-1 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 rounded-xl shadow-lg transition active:scale-95"
               >
                 Send Complaint
               </button>

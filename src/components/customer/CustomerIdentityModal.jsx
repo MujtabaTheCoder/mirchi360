@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { User, Phone, Flame, ArrowRight } from "lucide-react";
+import { User, Phone, Flame, ArrowRight, X } from "lucide-react";
 
 export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isOpen, onClose, onSave }) => {
   const [name, setName] = useState(initialName);
@@ -11,6 +11,11 @@ export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isO
       setName(initialName || "");
       setPhone(initialPhone || "");
       setError("");
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
     }
   }, [isOpen, initialName, initialPhone]);
 
@@ -33,19 +38,32 @@ export const CustomerIdentityModal = ({ initialName = "", initialPhone = "", isO
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+    <div 
+      onClick={onClose}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-hidden animate-in fade-in duration-150"
+    >
       <form
+        onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
-        className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-2xl"
+        className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm sm:max-w-md p-5 sm:p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150 relative"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center">
-            <Flame className="w-5 h-5 text-white" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-600/30 flex-shrink-0">
+              <Flame className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-extrabold text-white">Table Order Details</h2>
+              <p className="text-xs text-slate-400">Add contact info or proceed directly as guest.</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-base font-extrabold text-white">Table Order Details</h2>
-            <p className="text-xs text-slate-400">Add contact info or proceed directly as guest.</p>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {error && (
