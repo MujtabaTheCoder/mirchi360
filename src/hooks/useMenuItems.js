@@ -4,24 +4,34 @@ import { SEED_DATA } from '../lib/initialData';
 
 const fetchMenuItems = async () => {
   if (isSupabaseConfigured) {
-    const { data, error } = await supabase
-      .from('menu_items')
-      .select('*')
-      .eq('is_active', true);
-    
-    if (error) {
-      console.warn("Failed to fetch menu items from Supabase, falling back to seed data:", error);
-      return SEED_DATA.menuItems;
-    }
-    
-    if (data && data.length > 0) {
-      return data;
+    try {
+      const { data, error } = await supabase
+        .from('menu_items')
+        .select('*');
+      
+      if (!error && data && data.length > 0) {
+        return data.map(item => ({
+          ...item,
+          categoryName: item.categoryName || item.category_name,
+          image: item.image || item.image_url,
+          isOutOfStock: item.isOutOfStock !== undefined ? item.isOutOfStock : (item.is_out_of_stock || false),
+          hasVariants: item.hasVariants !== undefined ? item.hasVariants : (item.has_variants || false)
+        }));
+      }
+    } catch (e) {
+      console.warn("Supabase menu_items fetch error:", e);
     }
   }
   
-  // Fallback to seed data or localStorage if no supabase config
-  const saved = localStorage.getItem('mirchi_menu_items');
-  return saved ? JSON.parse(saved) : SEED_DATA.menuItems;
+  // Fallback to localStorage or seed data
+  try {
+    const saved = localStorage.getItem('mirchi_menu_items');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return SEED_DATA.menuItems;
 };
 
 export const useMenuItems = () => {

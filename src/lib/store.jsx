@@ -1144,8 +1144,10 @@ export const AppProvider = ({ children }) => {
       : 0;
     const nextOrderNumber = Math.max(currentMax, orderCounter) + 1;
     
-    const branchUuid = getBranchUuid(selectedBranch.id);
-    const tableUuid = getTableUuid(selectedBranch.id, selectedTableNumber);
+    const branchIdStr = selectedBranch?.id || 'branch-def';
+    const branchUuid = getBranchUuid(branchIdStr);
+    const tableNum = Number(selectedTableNumber) || 4;
+    const tableUuid = getTableUuid(branchIdStr, tableNum);
 
     const customerName = sanitizeTextInput(orderData.customerName || "", 80);
     const customerPhone = sanitizeTextInput(orderData.customerPhone || "", 30);
@@ -1172,12 +1174,12 @@ export const AppProvider = ({ children }) => {
       order_number: nextOrderNumber,
       restaurantId: RESTAURANT_ID,
       restaurant_id: RESTAURANT_ID,
-      branchId: selectedBranch.id,
+      branchId: branchIdStr,
       branch_id: branchUuid,
       tableId: tableUuid,
       table_id: tableUuid,
-      tableNumber: selectedTableNumber,
-      table_number: selectedTableNumber,
+      tableNumber: tableNum,
+      table_number: tableNum,
       status: "pending",
       payment: "Unpaid",
       estimatedMinutes: null,
